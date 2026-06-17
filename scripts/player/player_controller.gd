@@ -17,8 +17,13 @@ func _physics_process(delta: float) -> void:
 	_handle_jump()
 	_handle_movement()
 	move_and_slide()
-	# Sync transform if this peer owns the player
-	if is_multiplayer_authority():
+	# Sync transform if this peer owns the player and the session is active
+	if (
+		is_multiplayer_authority()
+		and multiplayer.multiplayer_peer != null
+		and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
+		and not multiplayer.get_peers().is_empty()
+	):
 		rpc("sync_transform", global_transform.origin, rotation.y)
 
 func _apply_gravity(delta: float) -> void:
