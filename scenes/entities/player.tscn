@@ -2,24 +2,117 @@
 
 [ext_resource type="Script" uid="uid://dsyonjttl7ovp" path="res://scripts/player/player_controller.gd" id="1"]
 [ext_resource type="Script" uid="uid://bts78akbg3oe7" path="res://scripts/player/camera_controller.gd" id="2"]
+[ext_resource type="Texture2D" uid="uid://53o8bo8i3chw" path="res://assets/sprites/human/faces.png" id="2_1ie0h"]
+[ext_resource type="Texture2D" uid="uid://bur1o36o7256q" path="res://assets/sprites/human/chest.png" id="3_42nxq"]
+[ext_resource type="Texture2D" uid="uid://dexhrhpq6gw3m" path="res://assets/sprites/human/legs.png" id="4_5u6hq"]
+[ext_resource type="Texture2D" uid="uid://7aujlffv84jh" path="res://assets/sprites/human/hands.png" id="5_d4qa6"]
 
 [sub_resource type="CapsuleShape3D" id="capsule_shape"]
+height = 1.6
 
-[sub_resource type="CapsuleMesh" id="capsule_mesh"]
+[sub_resource type="AtlasTexture" id="AtlasTexture_42nxq"]
+atlas = ExtResource("2_1ie0h")
+region = Rect2(0, 0, 10, 10)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_1ie0h"]
+atlas = ExtResource("3_42nxq")
+region = Rect2(8, 0, 16, 12)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_5u6hq"]
+atlas = ExtResource("4_5u6hq")
+region = Rect2(0, 0, 9, 11)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_d4qa6"]
+atlas = ExtResource("4_5u6hq")
+region = Rect2(9, 0, 9, 11)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hnsui"]
+atlas = ExtResource("3_42nxq")
+region = Rect2(1, 0, 8, 12)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_w5vjt"]
+atlas = ExtResource("3_42nxq")
+region = Rect2(23, 0, 8, 12)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hy0ec"]
+atlas = ExtResource("5_d4qa6")
+region = Rect2(0, 0, 7, 5)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_nedqn"]
+atlas = ExtResource("5_d4qa6")
+region = Rect2(7, 0, 7, 5)
 
 [node name="Player" type="CharacterBody3D" unique_id=2033129971]
 script = ExtResource("1")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=470815602]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.80444336, 0)
 shape = SubResource("capsule_shape")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=769277124]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
-mesh = SubResource("capsule_mesh")
+[node name="Head" type="Sprite3D" parent="." unique_id=676925572]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3010831, 0)
+pixel_size = 0.05
+billboard = 2
+texture_filter = 0
+texture = SubResource("AtlasTexture_42nxq")
+
+[node name="Chest" type="Sprite3D" parent="." unique_id=193673570]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8010831, 0)
+pixel_size = 0.05
+billboard = 2
+texture_filter = 0
+texture = SubResource("AtlasTexture_1ie0h")
+
+[node name="L_Leg" type="Sprite3D" parent="." unique_id=186721717]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.27608308, 0)
+offset = Vector2(-4.5, 0)
+pixel_size = 0.05
+billboard = 2
+texture_filter = 0
+texture = SubResource("AtlasTexture_5u6hq")
+
+[node name="R_Leg" type="Sprite3D" parent="." unique_id=2094030403]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.27608308, 0)
+offset = Vector2(4.45, 0)
+pixel_size = 0.05
+billboard = 2
+texture_filter = 0
+texture = SubResource("AtlasTexture_d4qa6")
+
+[node name="L_Arm" type="Sprite3D" parent="." unique_id=958502963]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8010831, 0)
+offset = Vector2(-11, 0)
+pixel_size = 0.05
+billboard = 2
+texture_filter = 0
+texture = SubResource("AtlasTexture_hnsui")
+
+[node name="R_Arm" type="Sprite3D" parent="." unique_id=1225995289]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8010831, 0)
+offset = Vector2(11, 0)
+pixel_size = 0.05
+billboard = 2
+texture_filter = 0
+texture = SubResource("AtlasTexture_w5vjt")
+
+[node name="L_Hand" type="Sprite3D" parent="." unique_id=1090056616]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.42602962, 0)
+offset = Vector2(-10.5, 0)
+pixel_size = 0.05
+billboard = 2
+texture_filter = 0
+texture = SubResource("AtlasTexture_hy0ec")
+
+[node name="R_Hand" type="Sprite3D" parent="." unique_id=1248345738]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.42602962, 0)
+offset = Vector2(10.45, 0)
+pixel_size = 0.05
+billboard = 2
+texture_filter = 0
+texture = SubResource("AtlasTexture_nedqn")
 
 [node name="CameraPivot" type="Node3D" parent="." unique_id=476005485]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4, 0)
 
 [node name="Camera3D" type="Camera3D" parent="CameraPivot" unique_id=3775159]
 script = ExtResource("2")

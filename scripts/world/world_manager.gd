@@ -39,11 +39,6 @@ func _spawn_player(peer_id: int) -> void:
 	var player: Node3D = player_scene.instantiate()
 	player.name = _player_name(peer_id)
 	player.set_multiplayer_authority(peer_id)
-	var mesh := player.get_node("MeshInstance3D") as MeshInstance3D
-	if mesh:
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = _color_for_id(peer_id)
-		mesh.material_override = mat
 	_players.add_child(player)
 	print("[WorldManager] Spawned player for peer %d (total: %d)" % [peer_id, _players.get_child_count()])
 
@@ -57,16 +52,3 @@ func _despawn_player(peer_id: int) -> void:
 
 func _player_name(peer_id: int) -> String:
 	return "Player_%d" % peer_id
-
-
-func _color_for_id(peer_id: int) -> Color:
-	match peer_id:
-		1: return Color(0.2, 0.6, 1.0)
-		2: return Color(1.0, 0.3, 0.3)
-		3: return Color(0.3, 1.0, 0.3)
-		4: return Color(1.0, 1.0, 0.3)
-		5: return Color(1.0, 0.3, 1.0)
-		6: return Color(0.3, 1.0, 1.0)
-		7: return Color(1.0, 0.6, 0.2)
-		8: return Color(0.6, 0.3, 1.0)
-		_: return Color(0.8, 0.8, 0.8)

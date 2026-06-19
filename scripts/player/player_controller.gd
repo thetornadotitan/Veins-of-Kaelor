@@ -6,8 +6,6 @@ extends CharacterBody3D
 @export var jump_velocity: float = 4.5
 @export var gravity_multiplier: float = 2.0
 
-@onready var _mesh: MeshInstance3D = $MeshInstance3D
-
 func _ready() -> void:
 	set_physics_process(is_multiplayer_authority())
 
@@ -49,8 +47,6 @@ func _handle_movement() -> void:
 	if direction.length() > 0.1:
 		velocity.x = direction.x * speed
 		velocity.z = direction.z * speed
-		if _mesh:
-			_mesh.rotation.y = atan2(direction.x, direction.z) + camera_yaw
 	else:
 		velocity.x = move_toward(velocity.x, 0, speed)
 		velocity.z = move_toward(velocity.z, 0, speed)
