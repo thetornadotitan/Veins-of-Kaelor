@@ -1,0 +1,189 @@
+﻿{
+  "human_chest": {
+    "texture_path": "res://assets/sprites/human/chest.png",
+    "parts": {
+      "forward": {
+        "Chest": { "px_offset": [9, 0], "px_width": 14, "px_height": 14 },
+        "L_Arm": { "px_offset": [1, 0], "px_width": 8, "px_height": 12 },
+        "R_Arm": { "px_offset": [23, 0], "px_width": 8, "px_height": 12 }
+      },
+      "left": {
+        "Chest": { "px_offset": [40, 0], "px_width": 16, "px_height": 14 },
+        "L_Arm": { "px_offset": [32, 0], "px_width": 8, "px_height": 12 },
+        "R_Arm": { "px_offset": [56, 0], "px_width": 8, "px_height": 12 }
+      },
+      "right": {
+        "Chest": { "px_offset": [8, 15], "px_width": 16, "px_height": 14 },
+        "L_Arm": { "px_offset": [24, 15], "px_width": 8, "px_height": 12 },
+        "R_Arm": { "px_offset": [0, 15], "px_width": 8, "px_height": 12 }
+      },
+      "away": {
+        "Chest": { "px_offset": [41, 15], "px_width": 14, "px_height": 14 },
+        "L_Arm": { "px_offset": [55, 15], "px_width": 8, "px_height": 12 },
+        "R_Arm": { "px_offset": [33, 15], "px_width": 8, "px_height": 12 }
+      }
+    },
+    "world": {
+      "forward": {
+        "Chest": { "sprite_offset": [0, 0], "y": -1 },
+        "L_Arm": { "sprite_offset": [-11, 0], "y": 0 },
+        "R_Arm": { "sprite_offset": [11, 0], "y": 0 }
+      },
+      "left": {
+        "Chest": { "sprite_offset": [0, 0], "y": -1 },
+        "L_Arm": { "sprite_offset": [0, 0], "y": 0 },
+        "R_Arm": { "sprite_offset": [0, 0], "y": 0 }
+      },
+      "right": {
+        "Chest": { "sprite_offset": [0, 0], "y": -1 },
+        "L_Arm": { "sprite_offset": [0, 0], "y": 0 },
+        "R_Arm": { "sprite_offset": [0, 0], "y": 0 }
+      },
+      "away": {
+        "Chest": { "sprite_offset": [0, 0], "y": -1 },
+        "L_Arm": { "sprite_offset": [11, 0], "y": 0 },
+        "R_Arm": { "sprite_offset": [-11, 0], "y": 0 }
+      }
+    },
+    "styles": {
+      "naked": [0, 0],
+      "shirt1": [64, 0],
+      "shirt2": [0, 30],
+      "shirt3": [64, 30]
+    }
+  },
+  "human_legs": {
+    "texture_path": "res://assets/sprites/human/legs.png",
+    "parts": {
+      "forward": {
+        "L_Leg": { "px_offset": [2, 0], "px_width": 7, "px_height": 11 },
+        "R_Leg": { "px_offset": [9, 0], "px_width": 7, "px_height": 11 }
+      },
+      "left": {
+        "L_Leg": { "px_offset": [18, 0], "px_width": 9, "px_height": 11 },
+        "R_Leg": { "px_offset": [27, 0], "px_width": 9, "px_height": 11 }
+      },
+      "right": {
+        "L_Leg": { "px_offset": [9, 11], "px_width": 9, "px_height": 11 },
+        "R_Leg": { "px_offset": [0, 11], "px_width": 9, "px_height": 11 }
+      },
+      "away": {
+        "L_Leg": { "px_offset": [27, 11], "px_width": 7, "px_height": 11 },
+        "R_Leg": { "px_offset": [20, 11], "px_width": 7, "px_height": 11 }
+      }
+    },
+    "world": {
+      "forward": {
+        "L_Leg": { "sprite_offset": [-3.5, 0], "y": -1 },
+        "R_Leg": { "sprite_offset": [3.5, 0], "y": -1 }
+      },
+      "left": {
+        "L_Leg": { "sprite_offset": [-2, 0], "y": -1 },
+        "R_Leg": { "sprite_offset": [2, 0], "y": -1 }
+      },
+      "right": {
+        "L_Leg": { "sprite_offset": [-2, 0], "y": -1 },
+        "R_Leg": { "sprite_offset": [2, 0], "y": -1 }
+      },
+      "away": {
+        "L_Leg": { "sprite_offset": [3.5, 0], "y": -1 },
+        "R_Leg": { "sprite_offset": [-3.5, 0], "y": -1 }
+      }
+    },
+    "styles": {
+      "naked": [0, 0],
+      "pants1": [36, 0],
+      "pants2": [0, 22],
+      "pants3": [36, 22]
+    }
+  },
+  "human_hands": {
+    "texture_path": "res://assets/sprites/human/hands.png",
+    "parts": {
+      "forward": {
+        "L_Hand": { "px_offset": [0, 0], "px_width": 7, "px_height": 5 },
+        "R_Hand": { "px_offset": [7, 0], "px_width": 7, "px_height": 5 }
+      },
+      "left": {
+        "L_Hand": { "px_offset": [0, 0], "px_width": 7, "px_height": 5 },
+        "R_Hand": { "px_offset": [7, 0], "px_width": 7, "px_height": 5 }
+      },
+      "right": {
+        "L_Hand": { "px_offset": [0, 0], "px_width": 7, "px_height": 5 },
+        "R_Hand": { "px_offset": [7, 0], "px_width": 7, "px_height": 5 }
+      },
+      "away": {
+        "L_Hand": { "px_offset": [0, 0], "px_width": 7, "px_height": 5 },
+        "R_Hand": { "px_offset": [7, 0], "px_width": 7, "px_height": 5 }
+      }
+    },
+    "world": {
+      "forward": {
+        "L_Hand": { "sprite_offset": [-10.5, 0], "y": 0 },
+        "R_Hand": { "sprite_offset": [10.5, 0], "y": 0 }
+      },
+      "left": {
+        "L_Hand": { "sprite_offset": [0, 0], "y": 0 },
+        "R_Hand": { "sprite_offset": [0, 0], "y": 0 }
+      },
+      "right": {
+        "L_Hand": { "sprite_offset": [0, 0], "y": 0 },
+        "R_Hand": { "sprite_offset": [0, 0], "y": 0 }
+      },
+      "away": {
+        "L_Hand": { "sprite_offset": [10.5, 0], "y": 0 },
+        "R_Hand": { "sprite_offset": [-10.5, 0], "y": 0 }
+      }
+    },
+    "styles": {
+      "naked": [0, 0],
+      "gloves1": [28, 0],
+      "gloves2": [0, 10],
+      "gloves3": [28, 10]
+    }
+  },
+  "human_faces": {
+    "texture_path": "res://assets/sprites/human/faces.png",
+    "parts": {
+      "forward": {
+        "Head": { "px_offset": [0, 0], "px_width": 10, "px_height": 10 }
+      },
+      "left": {
+        "Head": { "px_offset": [10, 0], "px_width": 10, "px_height": 10 }
+      },
+      "right": {
+        "Head": { "px_offset": [0, 10], "px_width": 10, "px_height": 10 }
+      },
+      "away": {
+        "Head": { "px_offset": [10, 10], "px_width": 10, "px_height": 10 }
+      }
+    },
+    "world": {
+      "forward": { "Head": { "sprite_offset": [0, 0], "y": 1 } },
+      "left": { "Head": { "sprite_offset": [0, 0], "y": 1 } },
+      "right": { "Head": { "sprite_offset": [0, 0], "y": 1 } },
+      "away": { "Head": { "sprite_offset": [0, 0], "y": 1 } }
+    },
+    "styles": {
+      "face1": [0, 0],
+      "face2": [20, 0],
+      "face3": [40, 0],
+      "face4": [60, 0],
+
+      "face5": [0, 20],
+      "face6": [20, 20],
+      "face7": [40, 20],
+      "face8": [60, 20],
+
+      "face9": [0, 40],
+      "face10": [20, 40],
+      "face11": [40, 40],
+      "face12": [60, 40],
+
+      "face13": [0, 60],
+      "face14": [20, 60],
+      "face15": [40, 60],
+      "face16": [60, 60]
+    }
+  }
+}

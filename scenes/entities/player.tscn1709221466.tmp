@@ -13,18 +13,21 @@ height = 1.6
 
 [node name="Player" type="CharacterBody3D" unique_id=2033129971]
 script = ExtResource("1")
+walk_speed = null
+sprint_speed = null
+jump_velocity = null
+gravity_multiplier = null
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=470815602]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.80444336, 0)
 shape = SubResource("capsule_shape")
 
 [node name="VisualController" type="Node3D" parent="." unique_id=999000001]
-unique_name_in_owner = true
 script = ExtResource("3")
 
 [node name="Head" type="Sprite3D" parent="." unique_id=676925572]
 unique_name_in_owner = true
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3390764, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3010831, 0)
 pixel_size = 0.05
 billboard = 2
 texture_filter = 0
@@ -32,7 +35,7 @@ texture = ExtResource("4")
 
 [node name="Chest" type="Sprite3D" parent="." unique_id=193673570]
 unique_name_in_owner = true
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8390764, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8010831, 0)
 pixel_size = 0.05
 billboard = 2
 texture_filter = 0
@@ -40,7 +43,7 @@ texture = ExtResource("5")
 
 [node name="L_Leg" type="Sprite3D" parent="." unique_id=186721717]
 unique_name_in_owner = true
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3140764, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.27608308, 0)
 offset = Vector2(-4.5, 0)
 pixel_size = 0.05
 billboard = 2
@@ -49,7 +52,7 @@ texture = ExtResource("6")
 
 [node name="R_Leg" type="Sprite3D" parent="." unique_id=2094030403]
 unique_name_in_owner = true
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3140764, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.27608308, 0)
 offset = Vector2(4.45, 0)
 pixel_size = 0.05
 billboard = 2
@@ -58,7 +61,7 @@ texture = ExtResource("6")
 
 [node name="L_Arm" type="Sprite3D" parent="." unique_id=958502963]
 unique_name_in_owner = true
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8390764, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8010831, 0)
 offset = Vector2(-11, 0)
 pixel_size = 0.05
 billboard = 2
@@ -67,7 +70,7 @@ texture = ExtResource("5")
 
 [node name="R_Arm" type="Sprite3D" parent="." unique_id=1225995289]
 unique_name_in_owner = true
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8390764, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8010831, 0)
 offset = Vector2(11, 0)
 pixel_size = 0.05
 billboard = 2
@@ -76,7 +79,7 @@ texture = ExtResource("5")
 
 [node name="L_Hand" type="Sprite3D" parent="." unique_id=1090056616]
 unique_name_in_owner = true
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.46402293, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.42602962, 0)
 offset = Vector2(-10.5, 0)
 pixel_size = 0.05
 billboard = 2
@@ -85,7 +88,7 @@ texture = ExtResource("7")
 
 [node name="R_Hand" type="Sprite3D" parent="." unique_id=1248345738]
 unique_name_in_owner = true
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.46402293, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.42602962, 0)
 offset = Vector2(10.45, 0)
 pixel_size = 0.05
 billboard = 2

@@ -3,8 +3,8 @@
 ## Goals
 
 - Render characters and creatures as 2D billboard sprites in 3D space
-- RPG Maker–style animation sets with 8-directional head-on perspective
-- 15-layer sprite stacking for equipment/armor/weapon/magic visualization
+- **4-way directional pseudo-3D character sprites** that display the correct frame based on viewer's camera angle
+- Data-driven equipment system so equipping a style updates all linked body parts from a single sheet reference
 - Souls-like AI for enemies (telegraphed attacks, patrol/aggro behavior)
 - First-person / third-person camera swap (Elder Scrolls style)
 - Ghost state (death) with distinct visual treatment
@@ -12,7 +12,9 @@
 - **Character portability:** Characters are independent data that travel between worlds
 
 ## Character Data (Portable)
+
 Characters are saved as independent data files separate from world state. A character's data includes:
+
 - Stats (STR/INT/DEX), skills, XP
 - Inventory and equipment (item IDs + randomized stats)
 - Faction reputation, quest progress, spellbook
@@ -24,65 +26,83 @@ Characters persist across worlds — join a friend's world with your character, 
 ## Core Concepts
 
 ### Camera System
+
 - **First-person:** Camera at eye level, mouse look. Character body not visible (or only hands/weapon).
 - **Third-person:** Camera behind and above character, showing full billboard sprite.
 - **Swap method:** Toggle key (default: `V`) or scroll wheel zoom.
 - **Transition:** Fast lerp or instant.
 
-### Billboard System
-- `Sprite3D` or custom `BillboardMesh` always faces camera
-- In third-person: billboard faces camera (full sprite visible)
-- In first-person: character sprite hidden (only weapon/hand visible)
-- Z-positioning for height offset
-- Shadow: separate sprite below character (ellipse)
+### Directional Sprite Stacking (4-Way Pseudo-3D)
 
-### Sprite Stacking (15 Layers)
-Each character is composited from multiple sprite layers drawn in order:
+Each character uses a **4-directional sprite system** (forward, left, right, away) rather than full 8-way to balance visual fidelity with development scope for solo development:
+
+| Direction | Description |
+|-----------|-------------|
+| **Forward** | Character faces the camera |
+| **Left**    | Character's left side to the camera |
+| **Right**   | Character's right side to the camera |
+| **Away**    | Character's back to the camera |
+
+**Implementation:** Each body part is a single `Sprite3D` node. The client calculates the relative angle from the local camera to the character, determines the direction, looks up the equipped style, and updates the Sprite3D's `texture.region` and positioning data locally. No network synchronization is needed for visuals - only `position`, `rotation`, and `equipped_styles` are replicated.
+
+### Data-Driven Equipment System
+
+Equipment is managed through a data-first approach:
+
+- **JSON Database:** `sprite_database.json` defines all sprite metadata
+- **Three-layer separation per sheet:**
+  - `parts`: Pixel relationships between body pieces (offsets, sizes) - defined once per sheet
+  - `world`: World-space positioning per direction - defined once per sheet  
+  - `styles`: Anchor regions per style per direction - `[x, y, w, h]` arrays
+- **Adding a style:** Requires only 4 numbers (one anchor region per direction)
+- **Equipment lookup:** `equipped_styles["slot"] = "style_name"` → query database for anchor → apply part offsets → set Sprite3D.region
+
+### Equipment Synchronization
+
+Equipment changes use the existing RPC system:
+
+1. Local player (or server) calls `equip_item(slot, style)` RPC
+2. Server updates `equipped_styles` dictionary and replicates via RPC sync
+3. All clients receive updated `equipped_styles` and recalculate visuals locally
+4. Visual derivation is client-side: `direction` (from camera angle) + `equipped_styles` → final sprite
+
+### Sprite3D Optimization
+
+Following KISS and DRY principles:
+
+- **Single Sprite3D per body part** - no duplication for directions
+- **Runtime region calculation** - combines anchor + part offset
+- **Local visual derivation** - `offset`, `position.y`, `render_priority`, `texture.region` calculated per-frame
+- **Billboard preserved** - `billboard = 2` maintained for camera-facing behavior
+- **Draw order via render_priority** - solves z-fighting without breaking billboard alignment
+
+### Sprite Stacking Layers (Bottom to Top)
+
+For Phase 2, we implement a simplified version focusing on core body parts:
 
 | Layer | Content |
 |-------|---------|
-| 1 | Shadow (ground ellipse) |
+| 1 | Shadow (ground ellipse - separate system) |
 | 2 | Base body |
-| 3 | Underwear / base clothing |
-| 4 | Pants / leg armor |
-| 5 | Shirt / torso armor |
-| 6 | Left pauldron |
-| 7 | Right pauldron |
-| 8 | Left arm armor |
-| 9 | Right arm armor |
-| 10 | Shoes / boots |
-| 11 | Hat / helmet |
-| 12 | Jacket / robe (outer) |
-| 13 | Weapon (held) |
-| 14 | Shield / off-hand |
-| 15 | Magic effects (auras, enchantments) |
+| 3 | Chest / torso (includes linked arms) |
+| 4 | Legs |
+| 5 | Hands |
+| 6 | Head / face |
+| *(Future phases will expand to full 15-layer system)* |
 
-- Each equipment slot has its own sprite sheet matching base animation frames
-- Sprite resolution: TBD (experiment with 64×64 or 128×128 per frame)
-- Implementation TBD: multiple Sprite3D nodes vs. shader-based compositing
+### Character Systems
 
-### Sprite Sources
-- RPG Maker–style sprite sheets
-- 8-directional, head-on perspective
-- Animation states: idle, walk, run, melee attack, ranged attack, spell cast, hurt, death, block/parry, dodge/roll
-
-### Animation
-- State machine per entity type
-- Frame-based animation with configurable framerate
-- Attack animations trigger hitbox frames (event-based, Souls-like frame data)
-- Equipment animation frames match base sprite frame count and timing
-
-### Player Character
+#### Player Character
 - WASD movement + mouse aim
 - Classless — no character class selection
 - Stats: STR (carry weight, melee damage, HP), INT (mana, magic effectiveness), DEX (stamina, speed, accuracy)
 - Skill-based progression (see `06-gameplay-systems.md`)
-- Equipment changes reflected on sprite via sprite stacking
+- **Equipment changes reflected via 4-way directional sprite system**
 - Customizable face and hair at character creation
 - Ghost state on death (see `06-gameplay-systems.md`)
 - Hardcore mode toggle at character creation (permanent permadeath)
 
-### NPCs
+#### NPCs
 - Patrol behavior within spawn zone
 - Dialogue interaction (concise, no exposition dumps)
 - Shop functionality (merchants)
@@ -91,7 +111,7 @@ Each character is composited from multiple sprite layers drawn in order:
 - Trainer functionality (skill training for money — very expensive)
 - Government enforcers (police unlicensed Transmatalogy use — TBD)
 
-### Enemies
+#### Enemies
 - Spawn zones with patrol paths
 - Aggro system: detect player within radius, chase within patrol bounds
 - Telegraphed attacks (wind-up → active hitbox → recovery, Souls-like)
@@ -99,16 +119,16 @@ Each character is composited from multiple sprite layers drawn in order:
 - Boss variants (larger, more complex patterns)
 - **Thematic:** All enemies are creatures from the Underloom — demons, monsters, aberrations. The Veins are the accessible tunnels; the Underloom is the vast unknown beneath.
 
-### Mounts
+#### Mounts
 - Tamed creatures that serve as combat companions
 - Taming skill determines what can be tamed (higher skill = more dangerous mounts)
 - Mounts fight alongside the player (no separate pet system)
 - Mounts can be killed and looted by others
 - Carry weight bonus while mounted
+- Rendered as billboard sprites (same directional system as characters)
 - Mounts require feeding/upkeep (TBD)
-- Rendered as billboard sprites (same system as characters)
 
-### Companions (Later Goal)
+#### Companions (Later Goal)
 - Player-recruited NPC allies (separate from mounts)
 - Follow and fight alongside player
 - Simple command system (follow, stay, attack target)
@@ -116,7 +136,7 @@ Each character is composited from multiple sprite layers drawn in order:
 ## Entity Component Breakdown
 
 ### Required Components
-- `BillboardSprite` — Rendering with 15-layer sprite stacking
+- `DirectionalSpriteStack` — 4-way directional sprite system with data-driven equipment
 - `CollisionShape3D` — Hitbox/hurtbox
 - `NavigationAgent3D` — Pathfinding
 - `HealthComponent` — HP tracking
@@ -126,7 +146,7 @@ Each character is composited from multiple sprite layers drawn in order:
 ### Optional Components
 - `LootComponent` — Drop table
 - `DialogueComponent` — Interaction
-- `EquipmentComponent` — Sprite stacking data (15 layers)
+- `EquipmentComponent` — Equipment slot management (integrated with DirectionalSpriteStack)
 - `SkillComponent` — Skill levels and XP
 - `AggroComponent` — Enemy detection/aggro
 - `GhostComponent` — Death state management
@@ -136,12 +156,12 @@ Each character is composited from multiple sprite layers drawn in order:
 
 ## Open Questions
 - Final sprite resolution? (Experiment needed)
-- Sprite stacking implementation: multiple Sprite3D nodes vs. shader compositing?
-- First-person: show character body or just weapon/hands?
+- How many styles per sprite sheet? (Determined by artist asset preparation)
+- Exact Rect2i values for Left/Right/Away directions per sheet (Pending asset creation)
+- First-person: show character body or just weapon/hands? (Currently hidden in first-person)
 - How many enemy types at launch?
 - Boss design complexity?
 - Mount upkeep mechanics?
 
 ---
-
 *See also:* `02-game-overview.md` | `06-gameplay-systems.md` | `08-art-direction.md`

@@ -246,6 +246,7 @@ func _update_direction(camera: Camera3D, target: Node3D) -> Direction:
 4. All connected clients see `equipped_styles` change.
 5. `DirectionalSpriteStack._process` on each client does:
    - Get `equipped_styles["chest"]` → `"blue_shirt"`
+   - Resolve sheet ID via `SHEET_MAP["chest"]` → `"human_chest"`
    - Query `SpriteDatabase.get("human_chest").styles["blue_shirt"]`
    - For each affected part (`Chest`, `L_Arm`, `R_Arm`), get the correct region info for the current `Direction`.
    - Apply `texture.region`, `offset`, and vertical `position_y` as described below.
@@ -342,6 +343,23 @@ extends Node3D
 @onready var _l_hand: Sprite3D = %L_Hand
 @onready var _r_hand: Sprite3D = %R_Hand
 
+var _base_y: Dictionary = {}
+
+# Maps style slot keys ("chest", "legs", "hands", "head") to sheet IDs
+# ("human_chest", "human_legs", "human_hands", "human_faces").
+# Keeping these separate avoids a key-mismatch bug in _apply_visuals.
+const SHEET_MAP: Dictionary = {
+    "chest": "human_chest",
+    "legs": "human_legs",
+    "hands": "human_hands",
+    "head": "human_faces",
+}
+
+# Maps part names (from JSON) to Sprite3D node references.
+# GDScript 4 `match` is a statement, not an expression — it cannot
+# return a value inline, so we use a dictionary lookup instead.
+var _part_nodes: Dictionary = {}
+
 # Replicated from server
 @export var equipped_styles: Dictionary = {
     "chest": "default",
@@ -349,6 +367,25 @@ extends Node3D
     "hands": "default",
     "head": "default"
 }
+
+func _ready() -> void:
+    _part_nodes = {
+        "Head":   _head,
+        "Chest":  _chest,
+        "L_Leg":  _l_leg,
+        "R_Leg":  _r_leg,
+        "L_Arm":  _l_arm,
+        "R_Arm":  _r_arm,
+        "L_Hand": _l_hand,
+        "R_Hand": _r_hand,
+    }
+    _cache_base_y()
+
+func _cache_base_y() -> void:
+    for part_name in _part_nodes:
+        var node: Sprite3D = _part_nodes[part_name]
+        if node:
+            _base_y[part_name] = node.position.y
 
 func _process(_delta: float) -> void:
     var camera := get_viewport().get_camera_3d()
@@ -362,39 +399,27 @@ func _calculate_direction(camera: Camera3D) -> Direction:
     ... # yaw math as shown earlier
 
 func _apply_visuals(dir: Direction) -> void:
-    # Iterate over each sprite sheet (chest, legs, hands, head)
-    for sheet_key in ["human_chest", "human_legs", "human_hands", "human_faces"]:
-        var sheet := SpriteDatabaseLoader.get_sheet(sheet_key)
-        var style := equipped_styles.get(sheet_key, "default")
+    for slot in SHEET_MAP:
+        var sheet_id: String = SHEET_MAP[slot]
+        var sheet: SheetData = SpriteDatabaseLoader.get_sheet(sheet_id)
+        var style := equipped_styles.get(slot, "default")
         var anchors: Dictionary = sheet.styles.get(style, {})
         var anchor_region: Rect2i = anchors.get(dir, Rect2i())
         var world: WorldDef = sheet.world.get(dir, WorldDef.new())
 
         for part_name in sheet.parts:
             var part: PartDef = sheet.parts[part_name]
-            var sprite_node = match part_name:
-                "Head":   _head
-                "Chest":  _chest
-                "L_Leg":  _l_leg
-                "R_Leg":  _r_leg
-                "L_Arm":  _l_arm
-                "R_Arm":  _r_arm
-                "L_Hand": _l_hand
-                "R_Hand": _r_hand
-                _: null
-            if sprite_node:
-                # Compute final atlas region from anchor + part px_offset
-                var region_rect := Rect2(
-                    anchor_region.position + part.px_offset,
-                    Vector2(part.px_width, part.px_height)
-                )
-                sprite_node.texture.region = region_rect
-                sprite_node.texture = sheet.texture
-
-                # Apply world‑space positioning for this direction
-                sprite_node.offset = world.sprite_offset
-                var base_y := sprite_node.position.y
-                sprite_node.position.y = base_y + world.y
+            var sprite_node: Sprite3D = _part_nodes.get(part_name)
+            if not sprite_node:
+                continue
+            var region_rect := Rect2(
+                anchor_region.position + part.px_offset,
+                Vector2(part.px_width, part.px_height)
+            )
+            sprite_node.texture.region = region_rect
+            sprite_node.texture = sheet.texture
+            sprite_node.offset = world.sprite_offset
+            sprite_node.position.y = _base_y.get(part_name, 0.0) + world.y
 
 func _update_render_order(dir: Direction) -> void:
     ... # render_priority adjustments for arm draw order
@@ -404,8 +429,8 @@ func _update_render_order(dir: Direction) -> void:
 
 1. Add an empty `Node3D` child named `VisualController`.
 2. Attach the `DirectionalSpriteStack` script.
-3. Ensure all Sprite3D nodes have the correct `%Name` references (as used above).
-4. Remove hard‑coded `AtlasTexture` sub‑resources from the scene; the script will assign the texture and region at runtime (keep a placeholder texture in the editor for convenience).
+3. Enable **unique_name_in_owner** on each Sprite3D (Head, Chest, L_Leg, R_Leg, L_Arm, R_Arm, L_Hand, R_Hand) so that `%Name` references resolve correctly.
+4. Replace hard‑coded `AtlasTexture` sub‑resources with a simple placeholder `CompressedTexture2D` pointing at the same `.png` sheets. This keeps sprites visible in the editor while the script overwrites `texture` and `region` at runtime.
 
 ### Step 5: Add `equipped_styles` to `MultiplayerSynchronizer`
 
@@ -451,7 +476,7 @@ Update the following documents to reflect the new decisions:
 | 2 | Why does chest include arms? | Intentional grouping. Chest + arms belong to a "clothing" slot. Later expansion will add overlay layers (armor, jackets, etc.). Arms are locked to the chest style. | One `human_chest` entry in JSON with `affected_parts: ["Chest", "L_Arm", "R_Arm"]`. |
 | 3 | Style names? | Placeholder names for now: `style_01`, `style_02`, etc. | JSON keys are generic; easy to rename later. |
 | 4 | Arm link behavior? | Arms are **locked** to their chest style. No mixing long‑sleeve shirt with bare arms, for now. | Simplifies data architecture. Future phase can split if needed. |
-| 5 | First‑person or third‑person? | **First‑person only** for this phase. Local player never sees themselves. | `DirectionalSpriteStack` only runs on remote player instances (or all instances if we want to support future TP). |
+| 5 | First‑person or third‑person? | **First‑person now, third‑person planned.** `DirectionalSpriteStack` runs on all instances; local player's sprites are hidden via visibility when in first‑person. No early‑out needed — the system is camera‑relative and works identically for any viewer angle. | Third‑person support is a camera change, not a visual‑system change. |
 
 ### Remaining Blockers for Implementation
 
@@ -468,6 +493,7 @@ Update the following documents to reflect the new decisions:
 
 - Animation (idle/walk frame cycling) — sprites are currently static frames.
 - 8‑directional upgrade.
+- Third‑person camera mode (the visual system already supports it; camera logic is separate).
 - Color/tint overlays (dyeing equipment).
 - Overhead nameplate / health bar UI.
 - Complex layering (capes, backpacks behind body).
@@ -489,4 +515,4 @@ Update the following documents to reflect the new decisions:
 
 ---
 
-*Plan version: 1.0 | Created: 2026‑06‑19 | Phase: 2*
+*Plan version: 1.1 | Created: 2026‑06‑19 | Phase: 2*
