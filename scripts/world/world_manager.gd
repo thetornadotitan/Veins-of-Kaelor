@@ -17,6 +17,7 @@ func _ready() -> void:
 	elif MultiplayerManager.get_my_id() != 0:
 		_spawn_player(MultiplayerManager.get_my_id())
 
+
 func _on_connection_succeeded() -> void:
 	if not MultiplayerManager.is_host() and MultiplayerManager.get_my_id() != 0:
 		_spawn_player(MultiplayerManager.get_my_id())
@@ -41,7 +42,14 @@ func _spawn_player(peer_id: int) -> void:
 	_players.add_child(player)
 	if peer_id == MultiplayerManager.get_my_id():
 		_place_player_on_terrain(player)
+		player.player_wrapped.connect(_on_local_player_wrapped)
 	print("[WorldManager] Spawned player for peer %d (total: %d)" % [peer_id, _players.get_child_count()])
+
+
+func _on_local_player_wrapped() -> void:
+	var cm: ChunkManager = get_tree().get_first_node_in_group("chunk_manager") as ChunkManager
+	if cm:
+		cm.rewrap_remote_players()
 
 
 func _place_player_on_terrain(player: Node3D) -> void:
@@ -58,6 +66,9 @@ func _place_player_on_terrain_deferred(player: Node3D) -> void:
 	var terrain_y: float = cm.get_terrain_height(spawn_x, spawn_z)
 	player.global_position = Vector3(spawn_x, terrain_y + 1.0, spawn_z)
 	print("[WorldManager] Placed player at (%.1f, %.1f, %.1f)" % [spawn_x, terrain_y + 1.0, spawn_z])
+	var pc: PlayerController = player as PlayerController
+	if pc and pc.is_multiplayer_authority():
+		pc.rpc("initial_sync", player.global_position, pc.camera_yaw)
 
 
 func _despawn_player(peer_id: int) -> void:

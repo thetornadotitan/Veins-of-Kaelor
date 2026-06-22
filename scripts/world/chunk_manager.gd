@@ -51,11 +51,23 @@ func get_terrain_height(world_x: float, world_z: float) -> float:
 	if chunk_data == null or chunk_data.heightmap.is_empty():
 		push_warning("[ChunkManager] Cannot get terrain height at (%.0f,%.0f): chunk data null/empty" % [world_x, world_z])
 		return 0.0
-	var local_x: float = world_x - float(chunk_x * ChunkData.CHUNK_SIZE)
-	var local_z: float = world_z - float(chunk_z * ChunkData.CHUNK_SIZE)
+	var local_x: float = fposmod(world_x, float(ChunkData.CHUNK_SIZE))
+	var local_z: float = fposmod(world_z, float(ChunkData.CHUNK_SIZE))
 	var h: float = chunk_data.get_height_at(local_x, local_z)
 	print("[ChunkManager] Terrain height at (%.0f,%.0f) = %.2f" % [world_x, world_z, h])
 	return h
+
+
+func rewrap_remote_players() -> void:
+	var players_node := get_tree().get_first_node_in_group("players")
+	if players_node == null:
+		return
+	for child: Node in players_node.get_children():
+		if child is PlayerController and not child.is_multiplayer_authority():
+			var remote_pos: Vector3 = child.global_position
+			var local_player_pos: Vector3 = _get_player_world_position()
+			var new_pos := TorusUtils.wrap_vector3_near(remote_pos, local_player_pos, _world_data)
+			child.global_position = new_pos
 
 
 func _update_chunks() -> void:
@@ -128,20 +140,10 @@ func _load_chunk(chunk_pos: Vector2i) -> void:
 
 func _chunk_to_nearest_world_position(chunk_pos: Vector2i) -> Vector2:
 	var player_pos: Vector3 = _get_player_world_position()
-	var world_size_x: float = _world_data.world_size_x
-	var world_size_z: float = _world_data.world_size_z
 	var base_x: float = float(chunk_pos.x * ChunkData.CHUNK_SIZE)
 	var base_z: float = float(chunk_pos.y * ChunkData.CHUNK_SIZE)
-	var x: float = base_x
-	var z: float = base_z
-	while x - player_pos.x > world_size_x * 0.5:
-		x -= world_size_x
-	while x - player_pos.x < -world_size_x * 0.5:
-		x += world_size_x
-	while z - player_pos.z > world_size_z * 0.5:
-		z -= world_size_z
-	while z - player_pos.z < -world_size_z * 0.5:
-		z += world_size_z
+	var x: float = TorusUtils.wrap_near(base_x, player_pos.x, _world_data.world_size_x)
+	var z: float = TorusUtils.wrap_near(base_z, player_pos.z, _world_data.world_size_z)
 	return Vector2(x, z)
 
 
@@ -161,7 +163,6 @@ func _unload_chunk(chunk_pos: Vector2i) -> void:
 
 func _update_lods() -> void:
 	var player_pos: Vector3 = _get_player_world_position()
-	var world_size: float = _world_data.world_size_x
 
 	for chunk_pos: Vector2i in _loaded_chunks.keys():
 		var chunk_node: TerrainChunk = _loaded_chunks[chunk_pos]

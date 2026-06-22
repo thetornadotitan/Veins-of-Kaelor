@@ -48,7 +48,7 @@ unique_name_in_owner = true
 offset_left = 10.0
 offset_top = 10.0
 offset_right = 210.0
-offset_bottom = 110.0
+offset_bottom = 150.0
 
 [node name="FpsLabel" type="Label" parent="HUD/VBoxContainer" unique_id=1342219812]
 unique_name_in_owner = true
@@ -64,6 +64,21 @@ text = "Peers: -"
 unique_name_in_owner = true
 layout_mode = 2
 text = "My ID: -"
+
+[node name="PosLabel" type="Label" parent="HUD/VBoxContainer" unique_id=901100001]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Pos: -"
+
+[node name="ChunkLabel" type="Label" parent="HUD/VBoxContainer" unique_id=901100002]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Chunk: -"
+
+[node name="RegionLabel" type="Label" parent="HUD/VBoxContainer" unique_id=901100003]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Region: -"
 
 [node name="HudScript" type="Node" parent="HUD" unique_id=636792833]
 script = ExtResource("3")
