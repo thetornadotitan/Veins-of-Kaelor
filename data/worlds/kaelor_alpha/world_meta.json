@@ -1,0 +1,25 @@
+{
+	"chunk_count_x": 128,
+	"chunk_count_z": 128,
+	"chunk_size": 40,
+	"created": "2026-06-21T20:25:40",
+	"generation_backend": "GDExtension",
+	"generation_params": {
+		"biome_moisture_scale": 0.008,
+		"biome_temperature_scale": 0.005,
+		"height_scale": 4.0,
+		"lacunarity": 2.0,
+		"octaves": 4,
+		"persistence": 0.5,
+		"water_level": 8.0
+	},
+	"height_range": {
+		"max": 40.0,
+		"min": 0.0
+	},
+	"name": "kaelor_alpha",
+	"region_size": 8,
+	"seed": 0,
+	"torus_radius": 1.0,
+	"version": "3.0"
+}

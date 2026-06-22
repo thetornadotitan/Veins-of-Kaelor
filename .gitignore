@@ -1,3 +1,10 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# Generated world data (regenerate from editor)
+data/worlds/*/regions/
+
+# GDExtension build artifacts (compile locally)
+addons/simplex_noise_4d/bin/
+addons/simplex_noise_4d/godot-cpp/

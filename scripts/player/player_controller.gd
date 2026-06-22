@@ -20,6 +20,7 @@ func _physics_process(delta: float) -> void:
 	_handle_jump()
 	_handle_movement()
 	move_and_slide()
+	_wrap_world_coordinates()
 	_update_camera_yaw()
 	_sync_transform_if_needed()
 
@@ -39,12 +40,12 @@ func _update_camera_yaw() -> void:
 
 func _handle_movement() -> void:
 	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	var camera_yaw: float = 0.0
+	var move_yaw: float = 0.0
 	var pivot := get_node_or_null("CameraPivot")
 	if pivot:
-		camera_yaw = pivot.rotation.y
-	var forward := Vector3(0, 0, -1).rotated(Vector3.UP, camera_yaw)
-	var right := Vector3(1, 0, 0).rotated(Vector3.UP, camera_yaw)
+		move_yaw = pivot.rotation.y
+	var forward := Vector3(0, 0, -1).rotated(Vector3.UP, move_yaw)
+	var right := Vector3(1, 0, 0).rotated(Vector3.UP, move_yaw)
 	var direction := (-forward * input_dir.y + right * input_dir.x).normalized()
 	var speed := sprint_speed if Input.is_action_pressed("sprint") else walk_speed
 	if direction.length() > 0.1:
@@ -109,3 +110,22 @@ func _randomize_equipment() -> void:
 		return
 	var random_style: String = style_list[randi() % style_list.size()]
 	rpc("equip_item", slot, random_style)
+
+func _wrap_world_coordinates() -> void:
+	var chunk_manager: ChunkManager = get_tree().get_first_node_in_group("chunk_manager")
+	if chunk_manager == null or chunk_manager.get_world_data() == null:
+		return
+	var wd: WorldData = chunk_manager.get_world_data()
+	var world_size_x: float = wd.world_size_x
+	var world_size_z: float = wd.world_size_z
+	var pos := global_position
+	if pos.x < 0.0:
+		pos.x += world_size_x
+	elif pos.x >= world_size_x:
+		pos.x -= world_size_x
+	if pos.z < 0.0:
+		pos.z += world_size_z
+	elif pos.z >= world_size_z:
+		pos.z -= world_size_z
+	if pos != global_position:
+		global_position = pos

@@ -1,0 +1,17 @@
+[configuration]
+
+entry_symbol = "gdext_init"
+compatibility_minimum = 4.2
+
+[libraries]
+
+windows.debug.x86_64 = "res://addons/simplex_noise_4d/bin/windows/debug/simplex_noise_4d.dll"
+windows.release.x86_64 = "res://addons/simplex_noise_4d/bin/windows/release/simplex_noise_4d.dll"
+windows.debug.x86_64.api_1 = "res://addons/simplex_noise_4d/bin/windows/debug/simplex_noise_4d.dll"
+windows.release.x86_64.api_1 = "res://addons/simplex_noise_4d/bin/windows/release/simplex_noise_4d.dll"
+linux.debug.x86_64 = "res://addons/simplex_noise_4d/bin/linux/debug/libsimplex_noise_4d.so"
+linux.release.x86_64 = "res://addons/simplex_noise_4d/bin/linux/release/libsimplex_noise_4d.so"
+macos.debug = "res://addons/simplex_noise_4d/bin/macos/debug/libsimplex_noise_4d.dylib"
+macos.release = "res://addons/simplex_noise_4d/bin/macos/release/libsimplex_noise_4d.dylib"
+web.debug.wasm32 = "res://addons/simplex_noise_4d/bin/web/debug/simplex_noise_4d.side.wasm"
+web.release.wasm32 = "res://addons/simplex_noise_4d/bin/web/release/simplex_noise_4d.side.wasm"
