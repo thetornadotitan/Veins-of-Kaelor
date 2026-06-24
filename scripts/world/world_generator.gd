@@ -26,6 +26,26 @@ func generate_world(config: WorldGenConfig) -> void:
 	params.height_range_max = config.height_range_max
 	params.biome_temperature_scale = 0.005
 	params.biome_moisture_scale = 0.008
+	params.continental_freq = config.continental_freq
+	params.continental_octaves = config.continental_octaves
+	params.continental_weight = config.continental_weight
+	params.mountain_mask_freq = config.mountain_mask_freq
+	params.mountain_mask_octaves = config.mountain_mask_octaves
+	params.mountain_mask_edge0 = config.mountain_mask_edge0
+	params.mountain_mask_edge1 = config.mountain_mask_edge1
+	params.mountain_freq = config.mountain_freq
+	params.mountain_octaves = config.mountain_octaves
+	params.mountain_persistence = config.mountain_persistence
+	params.mountain_lacunarity = config.mountain_lacunarity
+	params.plains_freq = config.plains_freq
+	params.plains_octaves = config.plains_octaves
+	params.plains_persistence = config.plains_persistence
+	params.detail_freq = config.detail_freq
+	params.detail_octaves = config.detail_octaves
+	params.detail_persistence = config.detail_persistence
+	params.detail_lacunarity = config.detail_lacunarity
+	params.detail_weight = config.detail_weight
+	params.power_exponent = config.power_exponent
 
 	var total_chunks: int = config.chunk_count_x * config.chunk_count_z
 	var chunks_done: int = 0
@@ -115,6 +135,26 @@ func _export_meta_json(config: WorldGenConfig, actual_seed: int, backend_name: S
 			"biome_temperature_scale": params.biome_temperature_scale,
 			"biome_moisture_scale": params.biome_moisture_scale,
 			"water_level": params.water_level,
+			"continental_freq": params.continental_freq,
+			"continental_octaves": params.continental_octaves,
+			"continental_weight": params.continental_weight,
+			"mountain_mask_freq": params.mountain_mask_freq,
+			"mountain_mask_octaves": params.mountain_mask_octaves,
+			"mountain_mask_edge0": params.mountain_mask_edge0,
+			"mountain_mask_edge1": params.mountain_mask_edge1,
+			"mountain_freq": params.mountain_freq,
+			"mountain_octaves": params.mountain_octaves,
+			"mountain_persistence": params.mountain_persistence,
+			"mountain_lacunarity": params.mountain_lacunarity,
+			"plains_freq": params.plains_freq,
+			"plains_octaves": params.plains_octaves,
+			"plains_persistence": params.plains_persistence,
+			"detail_freq": params.detail_freq,
+			"detail_octaves": params.detail_octaves,
+			"detail_persistence": params.detail_persistence,
+			"detail_lacunarity": params.detail_lacunarity,
+			"detail_weight": params.detail_weight,
+			"power_exponent": params.power_exponent,
 		},
 	}
 	var json_str: String = JSON.stringify(json_dict, "\t")

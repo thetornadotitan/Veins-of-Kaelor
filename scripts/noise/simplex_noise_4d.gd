@@ -162,6 +162,29 @@ func noise_4d_fbm(x: float, y: float, z: float, w: float, octaves: int, frequenc
 	return output / denom
 
 
+func noise_4d_ridged_fbm(x: float, y: float, z: float, w: float, octaves: int, frequency: float, persistence: float, lacunarity: float) -> float:
+	var output: float = 0.0
+	var denom: float = 0.0
+	var amp: float = 1.0
+	var freq: float = frequency
+	var weight: float = 1.0
+	for _i: int in range(octaves):
+		var n: float = 1.0 - absf(noise_4d(x * freq, y * freq, z * freq, w * freq))
+		n = n * n
+		n *= weight
+		weight = clampf(n * 2.0, 0.0, 1.0)
+		output += n * amp
+		denom += amp
+		freq *= lacunarity
+		amp *= persistence
+	return output / denom
+
+
+static func _static_smoothstep(edge0: float, edge1: float, x: float) -> float:
+	var t: float = clampf((x - edge0) / (edge1 - edge0), 0.0, 1.0)
+	return t * t * (3.0 - 2.0 * t)
+
+
 static func _fastfloor(x: float) -> int:
 	var i: int = int(x)
 	return i - 1 if x < float(i) else i

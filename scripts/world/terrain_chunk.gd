@@ -20,6 +20,8 @@ func setup(chunk_data: ChunkData, lod: int, chunk_pos: Vector2i) -> void:
 	_mesh_instance.mesh = mesh
 	_mesh_instance.material_override = TerrainMeshBuilder.get_terrain_material()
 	_mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	var chunk_aabb := AABB(Vector3.ZERO, Vector3(float(ChunkData.CHUNK_SIZE), float(ChunkData.GRID_RESOLUTION), float(ChunkData.CHUNK_SIZE)))
+	_mesh_instance.custom_aabb = chunk_aabb
 	add_child(_mesh_instance)
 
 	var shape: ConcavePolygonShape3D = CollisionGenerator.build_collision_shape(chunk_data)

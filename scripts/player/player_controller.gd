@@ -5,8 +5,13 @@ extends CharacterBody3D
 @export var sprint_speed: float = 8.0
 @export var jump_velocity: float = 4.5
 @export var gravity_multiplier: float = 2.0
+@export var swim_speed: float = 4.0
+@export var swim_buoyancy: float = 5.0
+@export var swim_drag: float = 3.0
+@export var swim_gravity: float = -2.0
 
 var camera_yaw: float = 0.0
+var is_swimming: bool = false
 
 signal player_wrapped
 
@@ -21,8 +26,12 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	_apply_gravity(delta)
-	_handle_jump()
+	_update_swimming_state()
+	if is_swimming:
+		_process_swimming(delta)
+	else:
+		_apply_gravity(delta)
+		_handle_jump()
 	_handle_movement()
 	move_and_slide()
 	var did_wrap: bool = _wrap_world_coordinates()
@@ -30,6 +39,21 @@ func _physics_process(delta: float) -> void:
 	_sync_transform_if_needed()
 	if did_wrap:
 		player_wrapped.emit()
+
+
+func _update_swimming_state() -> void:
+	var water: WaterPlane = get_tree().get_first_node_in_group("water_plane")
+	is_swimming = water != null and water.is_underwater(global_position.y)
+
+
+func _process_swimming(delta: float) -> void:
+	velocity.y += swim_buoyancy * delta
+	velocity *= (1.0 - swim_drag * delta)
+	velocity.y += swim_gravity * delta
+	if Input.is_action_pressed("jump"):
+		velocity.y += swim_speed * delta
+	if Input.is_action_pressed("crouch") or Input.is_action_pressed("move_back"):
+		velocity.y -= swim_speed * delta * 0.5
 
 
 func _apply_gravity(delta: float) -> void:
@@ -58,7 +82,7 @@ func _handle_movement() -> void:
 	var forward := Vector3(0, 0, -1).rotated(Vector3.UP, move_yaw)
 	var right := Vector3(1, 0, 0).rotated(Vector3.UP, move_yaw)
 	var direction := (-forward * input_dir.y + right * input_dir.x).normalized()
-	var speed := sprint_speed if Input.is_action_pressed("sprint") else walk_speed
+	var speed := sprint_speed if Input.is_action_pressed("sprint") else (swim_speed if is_swimming else walk_speed)
 	if direction.length() > 0.1:
 		velocity.x = direction.x * speed
 		velocity.z = direction.z * speed

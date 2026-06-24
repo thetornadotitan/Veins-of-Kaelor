@@ -180,11 +180,36 @@ float SimplexNoise4DNative::get_noise_4d_fbm(float x, float y, float z, float w,
     return output / denom;
 }
 
+float SimplexNoise4DNative::get_noise_4d_ridged_fbm(float x, float y, float z, float w,
+                                                      int octaves, float frequency,
+                                                      float persistence, float lacunarity) const {
+    float output = 0.0f;
+    float denom = 0.0f;
+    float amp = 1.0f;
+    float freq = frequency;
+    float weight = 1.0f;
+
+    for (int i = 0; i < octaves; i++) {
+        float n = 1.0f - fabsf(get_noise_4d(x * freq, y * freq, z * freq, w * freq));
+        n = n * n;
+        n *= weight;
+        weight = fminf(fmaxf(n * 2.0f, 0.0f), 1.0f);
+        output += n * amp;
+        denom += amp;
+        freq *= lacunarity;
+        amp *= persistence;
+    }
+
+    return output / denom;
+}
+
 void SimplexNoise4DNative::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_seed", "seed"), &SimplexNoise4DNative::set_seed);
     ClassDB::bind_method(D_METHOD("get_noise_4d", "x", "y", "z", "w"), &SimplexNoise4DNative::get_noise_4d);
     ClassDB::bind_method(D_METHOD("get_noise_4d_fbm", "x", "y", "z", "w", "octaves", "frequency", "persistence", "lacunarity"),
                          &SimplexNoise4DNative::get_noise_4d_fbm);
+    ClassDB::bind_method(D_METHOD("get_noise_4d_ridged_fbm", "x", "y", "z", "w", "octaves", "frequency", "persistence", "lacunarity"),
+                         &SimplexNoise4DNative::get_noise_4d_ridged_fbm);
 }
 
 }

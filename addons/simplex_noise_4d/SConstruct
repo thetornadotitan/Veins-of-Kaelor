@@ -10,6 +10,7 @@ import sys
 #   scons platform=windows target=editor           -> bin/windows/debug/simplex_noise_4d.dll
 #   scons platform=windows target=template_release -> bin/windows/release/simplex_noise_4d.dll
 #   scons platform=web target=template_release     -> bin/web/release/simplex_noise_4d.side.wasm
+#   scons platform=web target=template_debug       -> bin/web/debug/simplex_noise_4d.side.wasm
 
 env = SConscript("godot-cpp/SConstruct")
 
@@ -23,12 +24,10 @@ file_prefix = ""
 file_suffix = ""
 file_ext = ".dll"
 
-if env["platform"] == "web":
-    file_ext = ".side.wasm"
-
 target_name = "simplex_noise_4d"
 
-if env["target"] == "editor":
+# Map target to build subdir: editor/template_debug -> debug, template_release -> release
+if env["target"] in ["editor", "template_debug"]:
     build_subdir = "debug"
 else:
     build_subdir = "release"
@@ -37,6 +36,7 @@ if env["platform"] == "windows":
     platform_subdir = "windows"
 elif env["platform"] == "web":
     platform_subdir = "web"
+    file_ext = ".side.wasm"
 else:
     platform_subdir = env["platform"]
 

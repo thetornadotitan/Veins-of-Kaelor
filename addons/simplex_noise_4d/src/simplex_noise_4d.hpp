@@ -22,6 +22,9 @@ public:
     float get_noise_4d_fbm(float x, float y, float z, float w,
                             int octaves, float frequency,
                             float persistence, float lacunarity) const;
+    float get_noise_4d_ridged_fbm(float x, float y, float z, float w,
+                                    int octaves, float frequency,
+                                    float persistence, float lacunarity) const;
 
 protected:
     static void _bind_methods();

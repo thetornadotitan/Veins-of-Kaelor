@@ -1,8 +1,8 @@
 class_name ChunkManager
 extends Node3D
 
-const LOAD_RADIUS: int = 3
-const UNLOAD_DISTANCE: int = 5
+const LOAD_RADIUS: int = 5
+const UNLOAD_DISTANCE: int = 7
 
 var _world_data: WorldData
 var _loaded_chunks: Dictionary = {}
@@ -131,11 +131,24 @@ func _load_chunk(chunk_pos: Vector2i) -> void:
 	var world_pos: Vector2 = _chunk_to_nearest_world_position(chunk_pos)
 	chunk_node.set_world_position(world_pos.x, world_pos.y)
 
+	_populate_foliage(chunk_pos, chunk_data, world_pos)
+
 	print("[ChunkManager] Loaded chunk (%d,%d) -> world(%.0f,%.0f) lod=%d heightmap_len=%d first_h=%.2f" % [
 		chunk_pos.x, chunk_pos.y, world_pos.x, world_pos.y, lod,
 		chunk_data.heightmap.size(), chunk_data.heightmap[0] if chunk_data.heightmap.size() > 0 else -1.0
 	])
 	_loaded_chunks[chunk_pos] = chunk_node
+
+
+func _populate_foliage(chunk_pos: Vector2i, chunk_data: ChunkData, world_pos: Vector2) -> void:
+	var foliage_renderer: FoliageRenderer = get_tree().get_first_node_in_group("foliage_renderer")
+	if foliage_renderer == null:
+		return
+	var chunk_offset := Vector3(world_pos.x, 0.0, world_pos.y)
+	var water_level: float = _world_data.generation_params.water_level
+	var seed_value: int = _world_data.seed_value
+	var heightmap: PackedFloat32Array = chunk_data.heightmap
+	foliage_renderer.queue_generation(chunk_pos, heightmap, water_level, seed_value, chunk_offset)
 
 
 func _chunk_to_nearest_world_position(chunk_pos: Vector2i) -> Vector2:
@@ -148,10 +161,13 @@ func _chunk_to_nearest_world_position(chunk_pos: Vector2i) -> Vector2:
 
 
 func _refresh_chunk_positions() -> void:
+	var foliage_renderer: FoliageRenderer = get_tree().get_first_node_in_group("foliage_renderer")
 	for chunk_pos: Vector2i in _loaded_chunks.keys():
 		var chunk_node: TerrainChunk = _loaded_chunks[chunk_pos]
 		var world_pos: Vector2 = _chunk_to_nearest_world_position(chunk_pos)
 		chunk_node.set_world_position(world_pos.x, world_pos.y)
+		if foliage_renderer:
+			foliage_renderer.set_chunk_world_pos(chunk_pos, world_pos.x, world_pos.y)
 
 
 func _unload_chunk(chunk_pos: Vector2i) -> void:
@@ -159,6 +175,9 @@ func _unload_chunk(chunk_pos: Vector2i) -> void:
 	if chunk_node:
 		chunk_node.queue_free()
 		_loaded_chunks.erase(chunk_pos)
+	var foliage_renderer: FoliageRenderer = get_tree().get_first_node_in_group("foliage_renderer")
+	if foliage_renderer:
+		foliage_renderer.clear_chunk(chunk_pos)
 
 
 func _update_lods() -> void:

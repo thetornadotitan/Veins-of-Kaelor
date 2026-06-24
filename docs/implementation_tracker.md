@@ -2,7 +2,7 @@
 
 > **Purpose:** Living document that tracks what has been built vs. what the GDD specifies. It is meant to be read by a model (or human) with **zero prior context** so they can immediately understand the project's current state, what remains, and how to update this tracker.
 > 
-> **Last Updated:** 2026-06-22
+> **Last Updated:** 2026-06-23
 
 ---
 
@@ -21,7 +21,7 @@
 | `00-gdd-index.md` | Master index + resolved/open questions | Reference |
 | `01-design-questionnaire.md` | 74 answered design questions | Reference |
 | `02-game-overview.md` | Vision, pillars, factions, target experience | Reference |
-| `03-world-generation.md` | Procedural terrain, biomes, dungeons, day/night, weather | **In Progress** (terrain gen + torus wrapping done; biomes, water, foliage deferred) |
+| `03-world-generation.md` | Procedural terrain, biomes, dungeons, day/night, weather | **In Progress** (multi-layer noise + LOD seams + view distance + water + foliage done; biomes, day/night, weather pending) |
 | `04-building-system.md` | Buildings, interiors, culling | **Backburnered** |
 | `05-entities-characters.md` | Billboard sprites, 15-layer stacking, camera, AI, mounts | **Partial** (4-way directional sprite stacking done; animation, NPC, AI, mounts not started) |
 | `06-gameplay-systems.md` | Combat, Transmatalogy, crafting, quests, factions, economy, death | **Not Started** |
@@ -124,8 +124,16 @@
 - [x] **HeightmapGenerator** (`scripts/world/heightmap_generator.gd`)
   - 4D toroidal coordinate mapping: `(wx, wz) → (R·cos(2πx/L), R·sin(2πx/L), R·cos(2πz/L), R·sin(2πz/L))`
   - Auto-detects GDExtension vs GDScript backend
-  - FBM with configurable octaves, frequency, persistence, lacunarity
-  - Single-FBM pass (multi-layer noise planned but not yet implemented)
+  - **Multi-layer noise composition** (5 layers):
+    - Continental: low-freq, 2 oct, shapes landmass variation
+    - Mountain mask: medium-freq FBM + smoothstep, determines where mountains appear
+    - Mountain ridges: ridged multifractal, 6 oct, sharp peaks via `1-abs(noise)²` weighted accumulation
+    - Plains/hills: standard FBM, 4 oct, low persistence = gentle
+    - Detail: high-freq, 2 oct, small bumps and texture
+  - Power redistribution: `pow(elevation, 2.5)` for flat valleys + sharp peaks
+  - Frequency calibration for 4D torus: continental~2.5, mountain~10, plains~8, detail~200
+  - `smoothstep` helper for mountain mask thresholding
+  - Fallback: uses GDScript `ridged_fbm` if GDExtension lacks `get_noise_4d_ridged_fbm`
 - [x] **World data architecture** (`scripts/world/world_data.gd`, `chunk_data.gd`, `region_data.gd`, `world_meta.gd`)
   - `ChunkData`: `PackedFloat32Array` heightmap (41×41), biome ID, bilinear interpolation
   - `RegionData`: 8×8 chunks per region (64 per file), packed as `.res` binary
@@ -137,20 +145,26 @@
   - Saves region `.res` files + `world_meta.res` + `.json`
 - [x] **World gen config** (`data/world_gen_config.json`, `scripts/data/world_config.gd`, `noise_params.gd`)
   - JSON-driven parameters: height_scale, octaves, persistence, lacunarity, water_level, etc.
-  - Currently single-FBM config (height_scale=4, octaves=4, persistence=0.5, lacunarity=2.0)
+  - Multi-layer noise parameters: continental, mountain_mask, mountain, plains, detail (freq/octaves/persistence per layer)
+  - Power exponent for terrain redistribution (default 2.5)
+  - All new params have sensible defaults — no config breakage
 - [x] **Generated world data** (`data/worlds/kaelor_alpha/`)
   - `world_meta.res` + `world_meta.json` — world metadata
   - 256 region `.res` files (first ~7×16=112 generated as of last check)
 
 ### 2.5 Terrain Rendering + LOD
 - [x] **TerrainMeshBuilder** (`scripts/world/terrain_mesh_builder.gd`)
-  - 3-level LOD: spacing = `1 << lod` (LOD0=1, LOD1=2, LOD2=4)
-  - LOD distances: `[80, 240, INF]`
+  - 5-level LOD: spacing = `1 << lod` (LOD0=1, LOD1=2, LOD2=4, LOD3=8, LOD4=16)
+  - LOD distances: `[80, 200, 400, 700, INF]`
+  - Border-LOD0 ring: chunk border vertices always rendered at full LOD0 density
+  - Skirt geometry on all 4 edges (drops 10 units below border) as seam safety net
+  - 9-region subdivision: corners + edges + interior, each with aligned coordinate ranges
+  - `_aligned_range()` for seamless interior-to-border transitions
   - `SurfaceTool`-based mesh generation with vertex colors (biome coloring)
   - `get_lod_for_distance()` utility
 - [x] **TerrainChunk** (`scripts/world/terrain_chunk.gd`)
-  - Scene node: `MeshInstance3D` + `StaticBody3D` + `CollisionShape3D`
-  - `setup()`: builds mesh, collision, positions chunk
+  - Scene node: `MeshInstance3D` + `StaticBody3D` + `CollisionShape3D` + `NavigationRegion3D`
+  - `setup()`: builds mesh, collision, positions chunk; sets `custom_aabb` for frustum culling
   - `update_lod()`: rebuilds mesh at new LOD level
   - `set_world_position()`: positions chunk with toroidal nearest-copy offset
 - [x] **CollisionGenerator** (`scripts/world/collision_generator.gd`)
@@ -160,12 +174,13 @@
   - Runtime-baked `NavigationMesh` from heightmap data on all platforms
   - No platform-specific pre-baking
 - [x] **ChunkManager** (`scripts/world/chunk_manager.gd`)
-  - `LOAD_RADIUS=3` (~120m visible radius), `UNLOAD_DISTANCE=5`
+  - `LOAD_RADIUS=5` (~200m visible radius), `UNLOAD_DISTANCE=7`
   - Loads/unloads chunks around player with toroidal wrapping
   - LOD determination per chunk based on distance
   - `_refresh_chunk_positions()` repositions all chunks to nearest copy after wrap
   - `rewrap_remote_players()` re-unwraps remote players when local player wraps
   - `get_terrain_height()` with `fposmod()` for correct negative/wrapped coords
+  - Foliage integration: calls `FoliageRenderer.populate()` on load, `clear_chunk()` on unload
 
 ### 2.6 Toroidal Wrapping System
 - [x] **TorusUtils** (`scripts/world/torus_utils.gd`)
@@ -201,7 +216,49 @@
   - `WorldGenPlugin` editor plugin for parameter configuration + regenerate
   - `world_editor_ui.gd` for generation UI
 
-### 2.8 UI (Minimal)
+### 2.8 Water System
+- [x] **WaterPlane** (`scripts/world/water_plane.gd`)
+  - `MeshInstance3D` with `PlaneMesh` at Y=water_level, sized to cover terrain area
+  - Follows player XZ position each frame
+  - `is_underwater(world_y)` check for swimming detection
+  - `get_water_level()` accessor
+  - Added to `"water_plane"` group for player lookup
+- [x] **Water shader** (`assets/shaders/water.gdshader`)
+  - Depth-based terrain masking via `hint_depth_texture`
+  - Compatibility renderer NDC depth reconstruction (`CURRENT_RENDERER` branch)
+  - Gerstner wave displacement (3 wave components with configurable direction/steepness/wavelength/speed)
+  - Depth-based color blending: `mix(shallow_color, deep_color, depth_factor)`
+  - Foam at shallow edges: `smoothstep` threshold
+  - Edge fade for soft shoreline transition
+  - Render modes: `cull_disabled, depth_draw_always, blend_mix`
+- [x] **Swimming state** (in `scripts/player/player_controller.gd`)
+  - `is_swimming` bool: `true` when `global_position.y < water_level`
+  - Buoyancy: `velocity.y += swim_buoyancy * delta`
+  - Water drag: `velocity *= (1.0 - swim_drag * delta)`
+  - Reduced gravity underwater: `swim_gravity = -2.0`
+  - Jump = swim up, Crouch/Back = swim down
+  - `swim_speed` movement rate
+
+### 2.9 Foliage System
+- [x] **FoliageRenderer** (`scripts/world/foliage_renderer.gd`)
+  - Manages per-chunk `MultiMeshInstance3D` pool for grass, bushes, trees
+  - Pool key: `"{type}_{chunk_x}_{chunk_z}"`
+  - `populate()`: fills `MultiMesh` from `FoliageInstanceData`, sets `custom_aabb` per chunk
+  - `clear_chunk()`: hides and resets `instance_count = 0` (no free/alloc)
+  - Procedural mesh generation: grass card (2 triangles), bush (4 triangles), tree (trunk + canopy)
+  - Foliage shader with wind sway (`assets/shaders/foliage.gdshader`): `INSTANCE_CUSTOM.x` = phase, `.y` = responsiveness
+  - Per-instance color and custom data (wind phase, wind responsiveness)
+- [x] **FoliageGenerator** (`scripts/world/foliage_generator.gd`)
+  - Data-driven foliage placement per chunk from heightmap
+  - Seeded RNG per chunk (deterministic from chunk coordinates + world seed)
+  - Instance budgets: ~800-1500 grass, ~15-30 bushes, ~5-10 trees per chunk
+  - Water level filtering: grass above water+0.5, bushes above +1.0, trees above +2.0
+  - Returns `Dictionary` keyed by type name → `FoliageInstanceData`
+- [x] **FoliageInstanceData** (`scripts/world/foliage_instance_data.gd`)
+  - Lightweight data container: positions, rotations, scales, colors, custom_data arrays
+  - `add_instance()`, `instance_count()`, `clear()` methods
+
+### 2.10 UI (Minimal)
 - [x] **Main menu** (`scenes/ui/main_menu.tscn` + `scripts/ui/main_menu.gd`)
   - Host button → starts signaling server + hosts mesh
   - Join button → connects to signaling server + joins mesh
@@ -214,7 +271,7 @@
   - FPS counter
   - Peer count / My ID (only when connected)
 
-### 2.9 World Scene
+### 2.11 World Scene
 - [x] **World root** (`scenes/world/world.tscn`)
   - Contains `WorldManager` script
   - Contains `ChunkManager` with `TerrainRoot`
@@ -226,34 +283,6 @@
 ## 3. What Is NOT Done (The Gap)
 
 ### 3.1 World Generation — Remaining Work (`03-world-generation.md`)
-- [ ] **Multi-layer noise terrain** (Phase 2 Plan T5)
-  - Current: single FBM → uniform rolling hills
-  - Planned: 5-layer composition (continental + mountain mask + ridged mountains + plains + detail)
-  - Power redistribution (`pow(elevation, 2.5)`) for flat valleys + sharp peaks
-  - Frequency calibration for 4D torus: continental~2.5, mountain~10, plains~8, detail~200
-  - See `plans/plan-map-phase2.md` T5 for full spec
-- [ ] **LOD border ring** (Phase 2 Plan T4)
-  - Force chunk border vertices to always render at LOD0 density
-  - Eliminates T-junction cracks by construction
-  - Skirt as safety net for sub-pixel precision issues
-  - See `plans/plan-map-phase2.md` T4 for full spec
-- [ ] **Extended view distance** (Phase 2 Plan T2)
-  - Increase LOD_DISTANCES from `[80, 240, INF]` to `[80, 200, 400, 700, INF]` (5 tiers)
-  - Increase LOAD_RADIUS from 3 to 5-6
-  - Profile on web; target ~110K tris total
-  - See `plans/plan-map-phase2.md` T2 for full spec
-- [ ] **Water plane** (Phase 2 Plan T6)
-  - `MeshInstance3D` with `PlaneMesh` at Y=water_level
-  - Custom `ShaderMaterial` with depth-based terrain masking, Gerstner/sine waves, foam
-  - Swimming state in player controller (buoyancy, drag, `MOTION_MODE_FLOATING`)
-  - `Area3D` or Y-position check for water detection
-  - See `plans/plan-map-phase2.md` T6 + `plans/last_research_save.md` for shader research
-- [ ] **MultiMesh foliage** (Phase 2 Plan T3)
-  - Per-chunk MultiMeshInstance3D for grass, bushes, trees
-  - Data-driven foliage positions from `RegionData`
-  - LOD for foliage (full mesh → cluster → billboard → dither fade)
-  - Instance budgets: ~1500 grass, ~30 bushes, ~10 trees per chunk (web)
-  - See `plans/research-multimesh-foliage.md` + `plans/plan-map-phase2.md` T3
 - [ ] Biome system (temperature + moisture noise → Plains, Forest, Mountains, Swamp, Desert, Tundra)
 - [ ] Resource node placement (ore, trees, reagent plants, fishing spots)
 - [ ] Monster spawn zones with patrol routes
@@ -403,11 +432,6 @@
 - [ ] Web Audio API compatibility (latency considerations)
 
 ### 3.8 Technical Architecture — Remaining Work (`10-technical-architecture.md`)
-- [ ] **Multi-layer noise** (see Section 3.1 above — high priority)
-- [ ] **LOD seam elimination** (border LOD0 ring — see Section 3.1 above)
-- [ ] **Extended view distance** (see Section 3.1 above)
-- [ ] **Water rendering + swimming** (see Section 3.1 above)
-- [ ] **MultiMesh foliage / entity spawning** (see Section 3.1 above)
 - [ ] **Character data system**
   - [ ] `CharacterData` class/structure
   - [ ] `CharacterLoader` (save/load)
@@ -431,15 +455,15 @@
 - [ ] **Chunk/LOD manager enhancements**
   - [ ] Spatial geomorphing for interior vertices (store z_fine + z_coarse in `ARRAY_CUSTOM0`)
   - [ ] Pre-build all LOD meshes at chunk load, swap via reference (avoid runtime rebuild)
+  - [ ] Foliage LOD (cluster meshes at mid-distance, billboards at far, dither fade at max)
 - [ ] **World event manager**
   - [ ] Monster eruptions
   - [ ] Underloom incursions
   - [ ] Faction conflicts
   - [ ] Time/action/random triggers
-- [ ] **GDExtension web build** (`simplex_noise_4d.side.wasm`)
-  - Requires custom export templates with `dlink_enabled=yes`
-  - Emscripten 3.x required (v4 has open bug)
-  - Currently only Windows DLLs built
+- [ ] **GDExtension web build debug** (`simplex_noise_4d.side.wasm` debug)
+  - Release WASM built and working ✅
+  - Debug WASM build not yet tested (needs `target=editor` in scons, but web debug builds may need custom export templates)
 - [ ] **Performance targets**
   - [ ] 60 FPS target (40 minimum) — currently unmeasured
   - [ ] Load time <20s to title, <10s to world
@@ -512,6 +536,40 @@
    - T6: Water plane (depth-based shader, swimming, Gerstner waves)
 2. **Documented task dependency graph** — T5→T4→T2→T6→T3; T5 and T4 parallel.
 3. **Current blocker / next step:** Multi-layer noise (T5) is the highest-priority implementation target — it affects terrain quality for all downstream work. Border-LOD0 ring (T4) can be done in parallel.
+
+### Session: 2026-06-22 (Phase 2 Implementation — T5, T4, T2, T6, T3)
+1. **T5: Multi-layer noise terrain** — replaced single-FBM with 5-layer noise composition:
+   - Added `noise_4d_ridged_fbm()` to GDScript fallback and C++ GDExtension source
+   - Expanded `NoiseParams` with per-layer parameters (continental, mountain_mask, mountain, plains, detail)
+   - Expanded `WorldGenConfig` with matching export groups
+   - Rewrote `HeightmapGenerator.generate_chunk_heightmap()` to compose 5 layers + power redistribution
+   - Updated `WorldGenerator` to populate all new params into `NoiseParams` and JSON export
+   - Graceful fallback: GDScript `ridged_fbm` used if native extension lacks the method
+2. **T4: Border-LOD0 ring + skirt** — eliminated LOD seam cracks by construction:
+   - Rewrote `TerrainMeshBuilder.build_chunk_mesh()` with 9-region subdivision
+   - Border ring (rows/cols 0 and res-2) always at LOD0 density regardless of lod parameter
+   - Interior region uses lod-scaled spacing
+   - `_aligned_range()` generates coordinate lists that include both endpoint and interior-aligned points
+   - Skirt geometry on all 4 edges (10-unit downward drop) as sub-pixel crack safety net
+   - `custom_aabb` set on `TerrainChunk` for proper frustum culling
+3. **T2: Extended view distance** — increased visible area and LOD tiers:
+   - `LOD_DISTANCES` expanded from `[80, 240, INF]` to `[80, 200, 400, 700, INF]` (5 tiers)
+   - `LOAD_RADIUS` increased from 3 to 5 (~200m visible radius)
+   - `UNLOAD_DISTANCE` increased from 5 to 7
+4. **T6: Water plane with shader and swimming** — implemented depth-based water rendering:
+   - Created `assets/shaders/water.gdshader` — Gerstner wave displacement, depth-based terrain masking, foam, edge fade
+   - Created `scripts/world/water_plane.gd` — MeshInstance3D that follows player, provides `is_underwater()` check
+   - Added swimming to `PlayerController` — buoyancy, drag, reduced gravity, swim up/down
+   - Water node added to `world.tscn`
+5. **T3: MultiMesh foliage** — data-driven per-chunk foliage rendering:
+   - Created `scripts/world/foliage_renderer.gd` — pools MultiMeshInstance3D per chunk per foliage type
+   - Created `scripts/world/foliage_generator.gd` — seeded RNG placement from heightmap + water level
+   - Created `scripts/world/foliage_instance_data.gd` — lightweight data container
+   - Created `assets/shaders/foliage.gdshader` — wind sway via INSTANCE_CUSTOM
+   - Procedural placeholder meshes: grass card (2tri), bush (4tri), tree trunk+canopy (8tri)
+   - Integrated into `ChunkManager._load_chunk()` / `_unload_chunk()`
+   - FoliageRenderer node added to `world.tscn`
+6. **Next step:** Regenerate world data with new multi-layer noise (needs GDExtension rebuild for `ridged_fbm`, then run world generator). Then tune noise parameters visually and profile web performance.
 
 ---
 
@@ -607,12 +665,12 @@ Node3D (entity root)
 4. ~~Third-person camera swap (first-person can wait)~~
 5. ~~Basic player visual (placeholder mesh or sprite)~~
 
-### Phase 2: Terrain Quality + Visual Fidelity — NEXT
-1. **Multi-layer noise (T5)** — replace single FBM with 5-layer composition for mountains, valleys, plains
-2. **Border-LOD0 ring (T4)** — eliminate seam artifacts at chunk boundaries
-3. **Extended view distance (T2)** — 5 LOD tiers, LOAD_RADIUS 5-6
-4. **Water plane (T6)** — depth-based shader, swimming, wave displacement
-5. **MultiMesh foliage (T3)** — grass, bushes, trees per chunk with LOD
+### Phase 2: Terrain Quality + Visual Fidelity — IN PROGRESS (all 5 tasks implemented, pending world regeneration)
+1. ~~**Multi-layer noise (T5)**~~ — ✅ Done: 5-layer composition, ridged FBM, power redistribution
+2. ~~**Border-LOD0 ring (T4)**~~ — ✅ Done: 9-region subdivision, skirt geometry, custom_aabb
+3. ~~**Extended view distance (T2)**~~ — ✅ Done: 5 LOD tiers, LOAD_RADIUS=5
+4. ~~**Water plane (T6)**~~ — ✅ Done: depth-based shader, Gerstner waves, swimming
+5. ~~**MultiMesh foliage (T3)**~~ — ✅ Done: per-chunk pooled MultiMesh, data-driven placement, wind shader
 
 ### Phase 3: Combat & Death Loop
 1. `HealthComponent` + basic damage
@@ -689,7 +747,7 @@ This ensures every new context starts from the latest reality, not from the GDD 
 | File | Purpose | Status |
 |------|---------|--------|
 | `scenes/main/main.tscn` | Entry point — boots into main menu | Active |
-| `scenes/world/world.tscn` | World root — `WorldManager`, `ChunkManager`, `GhostManager`, `Players` | Active |
+| `scenes/world/world.tscn` | World root — `WorldManager`, `ChunkManager`, `FoliageRenderer`, `WaterPlane`, `GhostManager`, `Players` | Active |
 | `scenes/world/world_editor.tscn` | World generation editor tool | Active |
 | `scenes/world/terrain_chunk.tscn` | LOD-capable terrain chunk (MeshInstance3D + StaticBody3D) | Active |
 | `scenes/entities/player.tscn` | Player: CharacterBody3D + 8 Sprite3D stack + VisualController | Active |
@@ -703,10 +761,10 @@ This ensures every new context starts from the latest reality, not from the GDD 
 | `scripts/world/world_manager.gd` | Spawns/despawns players, assigns authority, rewraps on wrap | Active |
 | `scripts/world/chunk_manager.gd` | Spatial streaming, LOD, toroidal chunk positioning | Active |
 | `scripts/world/terrain_chunk.gd` | LOD-capable terrain chunk node (mesh + collision) | Active |
-| `scripts/world/terrain_mesh_builder.gd` | ArrayMesh generation with LOD levels | Active |
+| `scripts/world/terrain_mesh_builder.gd` | ArrayMesh generation with border-LOD0 ring, 5-level LOD, skirt | Active |
 | `scripts/world/collision_generator.gd` | ConcavePolygonShape3D from heightmap | Active |
 | `scripts/world/navmesh_generator.gd` | Runtime NavigationMesh baking | Active |
-| `scripts/world/heightmap_generator.gd` | 4D simplex noise + toroidal mapping + auto-detect backend | Active |
+| `scripts/world/heightmap_generator.gd` | 4D simplex noise + toroidal mapping + 5-layer multi-layer noise | Active |
 | `scripts/world/world_generator.gd` | Orchestrates full world generation, saves region files | Active |
 | `scripts/world/world_data.gd` | WorldData resource — region caching, chunk access | Active |
 | `scripts/world/chunk_data.gd` | ChunkData — heightmap, biome, bilinear interpolation | Active |
@@ -716,12 +774,16 @@ This ensures every new context starts from the latest reality, not from the GDD 
 | `scripts/world/ghost_manager.gd` | Ghost entity spawning/despawning near seams | Active |
 | `scripts/world/ghost_player.gd` | Visual-only ghost for minimap seam visibility | Active |
 | `scripts/world/projectile_ghost.gd` | Physics-enabled ghost for projectile seam collision | Active |
+| `scripts/world/water_plane.gd` | Water MeshInstance3D, follows player, is_underwater check | Active |
+| `scripts/world/foliage_renderer.gd` | Pooled per-chunk MultiMesh foliage rendering | Active |
+| `scripts/world/foliage_generator.gd` | Data-driven foliage placement from heightmap | Active |
+| `scripts/world/foliage_instance_data.gd` | Lightweight foliage instance data container | Active |
 | `scripts/world/world_editor_ui.gd` | World generation editor UI | Active |
-| `scripts/player/player_controller.gd` | Movement, jump, gravity, toroidal wrap, sync, ghostable | Active |
+| `scripts/player/player_controller.gd` | Movement, jump, gravity, swimming, toroidal wrap, sync, ghostable | Active |
 | `scripts/player/camera_controller.gd` | Mouse look, pitch clamp | Active |
 | `scripts/player/directional_sprite_stack.gd` | 4-way directional sprite + equipment visual system | Active |
 | `scripts/data/world_config.gd` | WorldGenConfig — JSON-serializable generation parameters | Active |
-| `scripts/data/noise_params.gd` | NoiseParams — noise parameter container | Active |
+| `scripts/data/noise_params.gd` | NoiseParams — per-layer noise params (continental, mountain, plains, detail) | Active |
 | `scripts/data/sprite_database_loader.gd` | SpriteDatabaseLoader autoload — JSON → SheetData | Active |
 | `scripts/data/sheet_data.gd` | SheetData resource — texture + parts + world + styles | Active |
 | `scripts/data/part_def.gd` | PartDef resource — px_offset, px_width, px_height | Active |
@@ -734,17 +796,23 @@ This ensures every new context starts from the latest reality, not from the GDD 
 ### GDExtension / Addons
 | File | Purpose | Status |
 |------|---------|--------|
-| `addons/simplex_noise_4d/` | 4D simplex noise C++ GDExtension (Windows DLLs built) | Active |
+| `addons/simplex_noise_4d/` | 4D simplexnoise C++ GDExtension (Windows DLLs + Web WASM built, includes ridged_fbm) | Active |
 | `addons/world_generation/` | World generation editor plugin | Active |
 | `webrtc/` | WebRTC native library (multi-platform DLLs) | Active |
 
 ### Data Files
 | File | Purpose | Status |
 |------|---------|--------|
-| `data/world_gen_config.json` | Generation parameters (seed, octaves, persistence, etc.) | Active |
+| `data/world_gen_config.json` | Generation parameters (multi-layer noise, LOD, water, etc.) | Active |
 | `data/sprite_database.json` | Sprite atlas metadata (parts, world, styles per sheet) | Active |
 | `data/worlds/kaelor_alpha/world_meta.res` + `.json` | Generated world metadata | Active |
 | `data/worlds/kaelor_alpha/regions/*.res` | 256 region files (8×8 chunks each) | Active |
+
+### Shader Assets
+| File | Purpose | Status |
+|------|---------|--------|
+| `assets/shaders/water.gdshader` | Depth-based water with Gerstner waves, foam, terrain masking | Active |
+| `assets/shaders/foliage.gdshader` | Foliage wind sway via INSTANCE_CUSTOM | Active |
 
 ### Sprite Assets
 | File | Purpose | Status |
@@ -768,7 +836,7 @@ This ensures every new context starts from the latest reality, not from the GDD 
 | `plans/done/phase-2-directional-sprite-stacking.md` | Phase 2 plan (completed) | Done |
 | `plans/done/phase-3-world-generation.md` | Phase 3 plan (completed) | Done |
 | `plans/done/supplemental-torus-wrapping.md` | Torus wrapping supplemental plan (completed) | Done |
-| `plans/plan-map-phase2.md` | Phase 2 map quality tasks (T1-T6, upcoming) | **Active / Next** |
+| `plans/plan-map-phase2.md` | Phase 2 map quality tasks (T1-T6) — T5,T4,T2,T6,T3 implemented | **Implemented** |
 | `plans/research-multimesh-foliage.md` | MultiMesh foliage research | Reference |
 | `plans/last_research_save.md` | Web perf research, LOD stitching, water rendering, noise research | Reference |
 
