@@ -7,6 +7,7 @@
 [ext_resource type="Texture2D" uid="uid://bur1o36o7256q" path="res://assets/sprites/human/chest.png" id="5"]
 [ext_resource type="Texture2D" uid="uid://dexhrhpq6gw3m" path="res://assets/sprites/human/legs.png" id="6"]
 [ext_resource type="Texture2D" uid="uid://7aujlffv84jh" path="res://assets/sprites/human/hands.png" id="7"]
+[ext_resource type="Script" path="res://scripts/multiplayer/network_sync.gd" id="8"]
 
 [sub_resource type="CapsuleShape3D" id="capsule_shape"]
 height = 1.6
@@ -97,4 +98,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4, 0)
 
 [node name="Camera3D" type="Camera3D" parent="CameraPivot" unique_id=3775159]
 script = ExtResource("2")
+
+[node name="NetworkSync" type="Node" parent="." unique_id=888000001]
+script = ExtResource("8")
 

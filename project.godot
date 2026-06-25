@@ -20,6 +20,7 @@ config/icon="res://icon.svg"
 MultiplayerManager="*res://scripts/multiplayer/multiplayer_manager.gd"
 SpriteDatabaseLoader="*res://scripts/data/sprite_database_loader.gd"
 GhostManager="*res://scripts/world/ghost_manager.gd"
+GameStateController="*res://scripts/multiplayer/game_state_controller.gd"
 
 [display]
 

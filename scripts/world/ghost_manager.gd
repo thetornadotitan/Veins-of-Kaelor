@@ -7,10 +7,11 @@ var _world_data: WorldData
 
 
 func _ready() -> void:
-	process_mode = Node.PROCESS_MODE_DISABLED
+	set_process(false)
 
 
 func start() -> void:
+	set_process(true)
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 

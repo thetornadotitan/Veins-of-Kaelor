@@ -5,27 +5,14 @@ signal peer_disconnected(peer_id: int)
 signal connection_succeeded()
 signal connection_failed()
 
-@export var signaling_port: int = 9080
-@export var signaling_address: String = "127.0.0.1"
+@export var relay_port: int = 9080
+@export var relay_address: String = "127.0.0.1"
 
-var _signaling: Node = null
-var _rtc_mp: WebRTCMultiplayerPeer = null
-var _ws: WebSocketPeer = null
+var _ws_mp: WebSocketMultiplayerPeer = null
 var _my_id: int = 0
-var _pending_candidates: Dictionary = {}
-var _remote_desc_set: Dictionary = {}
-var _connected_peers: Dictionary = {}
 var _is_host: bool = false
-
-
-func _on_mp_peer_connected(peer_id: int) -> void:
-	_connected_peers[peer_id] = true
-	peer_connected.emit(peer_id)
-
-
-func _on_mp_peer_disconnected(peer_id: int) -> void:
-	_connected_peers.erase(peer_id)
-	peer_disconnected.emit(peer_id)
+var _connected_peers: Dictionary = {}
+var _connection_succeeded_emitted: bool = false
 
 
 func _ready() -> void:
@@ -35,15 +22,30 @@ func _ready() -> void:
 		_start_dedicated_server()
 
 
+func _on_mp_peer_connected(peer_id: int) -> void:
+	_connected_peers[peer_id] = true
+	print("[MP:%d] multiplayer.peer_connected id=%d" % [_my_id, peer_id])
+	peer_connected.emit(peer_id)
+
+
+func _on_mp_peer_disconnected(peer_id: int) -> void:
+	_connected_peers.erase(peer_id)
+	print("[MP:%d] multiplayer.peer_disconnected id=%d" % [_my_id, peer_id])
+	peer_disconnected.emit(peer_id)
+
+
 func _start_dedicated_server() -> void:
-	_signaling = SignalingServer.new()
-	_signaling.name = "SignalingServer"
-	add_child(_signaling)
-	if _signaling.start(signaling_port) != OK:
-		push_error("Failed to start dedicated signaling server")
+	_is_host = true
+	_ws_mp = WebSocketMultiplayerPeer.new()
+	var err := _ws_mp.create_server(relay_port)
+	if err != OK:
+		push_error("Failed to start dedicated relay server on port %d" % relay_port)
 		get_tree().quit(1)
-	else:
-		print("Dedicated signaling server running.")
+		return
+	multiplayer.multiplayer_peer = _ws_mp
+	_my_id = 1
+	print("Dedicated relay server running on port %d" % relay_port)
+	set_process(true)
 
 
 func host_game() -> void:
@@ -51,25 +53,18 @@ func host_game() -> void:
 		disconnect_game()
 
 	_is_host = true
-
-	_signaling = SignalingServer.new()
-	_signaling.name = "SignalingServer"
-	add_child(_signaling)
-	if _signaling.start(signaling_port) != OK:
-		push_error("Failed to start signaling server on port %d" % signaling_port)
-		_signaling.queue_free()
-		_signaling = null
-		connection_failed.emit()
-		return
-
-	_ws = WebSocketPeer.new()
-	var err := _ws.connect_to_url("ws://127.0.0.1:%d" % signaling_port)
+	_connection_succeeded_emitted = false
+	_ws_mp = WebSocketMultiplayerPeer.new()
+	var err := _ws_mp.create_server(relay_port)
 	if err != OK:
-		push_error("Failed to connect to signaling server")
-		_teardown()
+		push_error("Failed to start relay server on port %d: %s" % [relay_port, error_string(err)])
+		_ws_mp = null
 		connection_failed.emit()
 		return
 
+	multiplayer.multiplayer_peer = _ws_mp
+	_my_id = _ws_mp.get_unique_id()
+	print("[MP:%d] host: relay server started on port %d" % [_my_id, relay_port])
 	set_process(true)
 
 
@@ -78,15 +73,19 @@ func join_game() -> void:
 		disconnect_game()
 
 	_is_host = false
-
-	_ws = WebSocketPeer.new()
-	var err := _ws.connect_to_url("ws://%s:%d" % [signaling_address, signaling_port])
+	_connection_succeeded_emitted = false
+	_ws_mp = WebSocketMultiplayerPeer.new()
+	var url := "ws://%s:%d" % [relay_address, relay_port]
+	var err := _ws_mp.create_client(url)
 	if err != OK:
-		push_error("Failed to connect to signaling server: %s" % error_string(err))
-		_teardown()
+		push_error("Failed to connect to relay server: %s" % error_string(err))
+		_ws_mp = null
 		connection_failed.emit()
 		return
 
+	multiplayer.multiplayer_peer = _ws_mp
+	_my_id = _ws_mp.get_unique_id()
+	print("[MP:%d] join: connecting to %s" % [_my_id, url])
 	set_process(true)
 
 
@@ -96,26 +95,62 @@ func disconnect_game() -> void:
 
 
 func _teardown() -> void:
-	if _rtc_mp:
-		_rtc_mp.close()
-		_rtc_mp = null
-	if _ws:
-		_ws.close()
-		_ws = null
-	if _signaling:
-		_signaling.stop()
-		_signaling.queue_free()
-		_signaling = null
+	if _ws_mp:
+		_ws_mp.close()
+		_ws_mp = null
 	multiplayer.multiplayer_peer = null
 	_my_id = 0
 	_is_host = false
-	_pending_candidates.clear()
-	_remote_desc_set.clear()
 	_connected_peers.clear()
+	_connection_succeeded_emitted = false
+
+
+func _process(_delta: float) -> void:
+	if not _ws_mp:
+		return
+
+	_ws_mp.poll()
+
+	var status := _ws_mp.get_connection_status()
+	if status == MultiplayerPeer.CONNECTION_DISCONNECTED:
+		if not _connection_succeeded_emitted:
+			print("[MP:%d] connection failed or lost" % _my_id)
+			connection_failed.emit()
+			_teardown()
+		else:
+			print("[MP:%d] disconnected from relay" % _my_id)
+			_teardown()
+			peer_disconnected.emit(0)
+		return
+
+	if status == MultiplayerPeer.CONNECTION_CONNECTED and not _connection_succeeded_emitted:
+		_my_id = _ws_mp.get_unique_id()
+		print("[MP:%d] connected to relay, emitting connection_succeeded" % _my_id)
+		_connection_succeeded_emitted = true
+		connection_succeeded.emit()
+
+
+func is_relay_ready() -> bool:
+	if _my_id == 0:
+		return false
+	if _ws_mp == null:
+		return false
+	if _ws_mp.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED:
+		return false
+	if _is_host:
+		return true
+	return not _connected_peers.is_empty()
+
+
+func is_webrtc_ready() -> bool:
+	return is_relay_ready()
 
 
 func is_peer_connected() -> bool:
-	return _my_id != 0 and multiplayer.multiplayer_peer != null and multiplayer.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_DISCONNECTED
+	if _ws_mp == null:
+		return false
+	var status := _ws_mp.get_connection_status()
+	return status == MultiplayerPeer.CONNECTION_CONNECTED
 
 
 func get_my_id() -> int:
@@ -134,147 +169,3 @@ func get_peer_count() -> int:
 
 func is_peer_webrtc_connected(peer_id: int) -> bool:
 	return _connected_peers.has(peer_id)
-
-
-func _process(_delta: float) -> void:
-	if not _ws:
-		return
-
-	_ws.poll()
-
-	if _ws.get_ready_state() == WebSocketPeer.STATE_CLOSED:
-		return
-
-	while _ws.get_available_packet_count():
-		var packet: PackedByteArray = _ws.get_packet()
-		if _ws.was_string_packet():
-			_handle_signaling_message(packet.get_string_from_utf8())
-
-
-func _handle_signaling_message(text: String) -> void:
-	var json := JSON.new()
-	if json.parse(text) != OK:
-		return
-	var msg: Dictionary = json.get_data()
-	var msg_type_raw: String = msg.get("type", "")
-	var msg_type: String = msg_type_raw.to_upper()
-	var from_id: int = msg.get("id", 0)
-	var data: String = msg.get("data", "")
-
-	match msg_type:
-		"ID":
-			if _my_id == 0:
-				_my_id = data.to_int()
-				_rtc_mp = WebRTCMultiplayerPeer.new()
-				_rtc_mp.create_mesh(_my_id)
-				multiplayer.multiplayer_peer = _rtc_mp
-				_send("JOIN", 0, "")
-				connection_succeeded.emit()
-		"JOIN":
-			if from_id != _my_id and from_id > 0:
-				_create_webrtc_peer(from_id)
-		"OFFER":
-			_handle_offer(from_id, data)
-		"ANSWER":
-			_handle_answer(from_id, data)
-		"CANDIDATE":
-			_handle_candidate(from_id, data)
-
-
-func _create_webrtc_peer(peer_id: int) -> void:
-	if not _rtc_mp:
-		return
-	if _rtc_mp.has_peer(peer_id):
-		return
-
-	var peer: WebRTCPeerConnection = WebRTCPeerConnection.new()
-	peer.initialize({"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]})
-
-	peer.session_description_created.connect(
-		func(type: String, sdp: String):
-			_send(type.to_upper(), peer_id, sdp)
-			if type == "offer" or type == "answer":
-				peer.set_local_description(type, sdp)
-	)
-
-	peer.ice_candidate_created.connect(
-		func(mid: String, _index: int, sdp: String):
-			_send("CANDIDATE", peer_id, "%s\n%s" % [mid, sdp])
-	)
-
-	var err := _rtc_mp.add_peer(peer, peer_id)
-	if err != OK:
-		push_error("WebRTC: Failed to add peer %d: %s" % [peer_id, error_string(err)])
-		return
-
-	if _my_id < peer_id:
-		if peer.get_connection_state() == WebRTCPeerConnection.STATE_NEW:
-			peer.create_offer()
-
-
-func _handle_offer(from_id: int, sdp: String) -> void:
-	if not _rtc_mp:
-		return
-	if not _rtc_mp.has_peer(from_id):
-		_create_webrtc_peer(from_id)
-	if _rtc_mp and _rtc_mp.has_peer(from_id):
-		var peer_dict: Dictionary = _rtc_mp.get_peer(from_id)
-		if peer_dict.has("connection"):
-			peer_dict.connection.set_remote_description("offer", sdp)
-			_remote_desc_set[from_id] = true
-			_flush_pending_candidates(from_id)
-
-
-func _handle_answer(from_id: int, sdp: String) -> void:
-	if _rtc_mp:
-		var peer_dict: Dictionary = _rtc_mp.get_peer(from_id)
-		if peer_dict.has("connection"):
-			peer_dict.connection.set_remote_description("answer", sdp)
-			_remote_desc_set[from_id] = true
-			_flush_pending_candidates(from_id)
-
-
-func _handle_candidate(from_id: int, data: String) -> void:
-	if not _rtc_mp or not _rtc_mp.has_peer(from_id):
-		_buffer_candidate(from_id, data)
-		if _rtc_mp and not _rtc_mp.has_peer(from_id):
-			_create_webrtc_peer(from_id)
-		return
-
-	if not _remote_desc_set.has(from_id):
-		_buffer_candidate(from_id, data)
-		return
-
-	_apply_candidate(from_id, data)
-
-
-func _buffer_candidate(peer_id: int, data: String) -> void:
-	if not _pending_candidates.has(peer_id):
-		_pending_candidates[peer_id] = []
-	_pending_candidates[peer_id].append(data)
-
-
-func _apply_candidate(peer_id: int, data: String) -> void:
-	if not _rtc_mp:
-		return
-	var peer_dict: Dictionary = _rtc_mp.get_peer(peer_id)
-	if peer_dict.has("connection"):
-		var parts: PackedStringArray = data.split("\n", false, 1)
-		if parts.size() >= 2:
-			peer_dict.connection.add_ice_candidate(parts[0], 0, parts[1])
-
-
-func _flush_pending_candidates(peer_id: int) -> void:
-	if not _pending_candidates.has(peer_id):
-		return
-	var candidates: Array = _pending_candidates[peer_id]
-	for candidate: String in candidates:
-		_apply_candidate(peer_id, candidate)
-	_pending_candidates.erase(peer_id)
-
-
-func _send(msg_type: String, to_id: int, data: String) -> void:
-	if not _ws or _ws.get_ready_state() != WebSocketPeer.STATE_OPEN:
-		return
-	var msg := {"type": msg_type, "to": to_id, "data": data}
-	_ws.send_text(JSON.stringify(msg))

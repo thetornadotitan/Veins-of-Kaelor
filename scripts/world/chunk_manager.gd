@@ -12,6 +12,8 @@ var _player_chunk: Vector2i = Vector2i(-9999, -9999)
 var _initialized: bool = false
 var _chunk_load_queue: Array[Vector2i] = []
 var _navmesh_queue: Array[TerrainChunk] = []
+var _spawn_chunk: Vector2i = Vector2i(0, 0)
+var _using_spawn_point: bool = true
 
 @export var world_name: String = "kaelor_alpha"
 
@@ -33,6 +35,49 @@ func _process(_delta: float) -> void:
 	_process_chunk_queue()
 	_process_navmesh_queue()
 	_update_chunks()
+
+
+func set_spawn_chunk(chunk_x: int, chunk_z: int) -> void:
+	_spawn_chunk = Vector2i(chunk_x, chunk_z)
+
+
+func is_spawn_area_ready() -> bool:
+	if not _initialized:
+		return false
+	if _using_spawn_point:
+		var spawn_world: Vector3 = _spawn_point_world_position()
+		var spawn_world_chunk: Vector2i = _world_to_chunk(spawn_world)
+		for dx: int in range(-LOAD_RADIUS, LOAD_RADIUS + 1):
+			for dz: int in range(-LOAD_RADIUS, LOAD_RADIUS + 1):
+				var crx: int = posmod(spawn_world_chunk.x + dx, _world_data.chunk_count_x)
+				var crz: int = posmod(spawn_world_chunk.y + dz, _world_data.chunk_count_z)
+				if not _loaded_chunks.has(Vector2i(crx, crz)):
+					return false
+	return true
+
+
+func get_spawn_area_progress() -> float:
+	if not _initialized:
+		return 0.0
+	var spawn_world: Vector3 = _spawn_point_world_position()
+	var spawn_world_chunk: Vector2i = _world_to_chunk(spawn_world)
+	var total: int = 0
+	var loaded: int = 0
+	for dx: int in range(-LOAD_RADIUS, LOAD_RADIUS + 1):
+		for dz: int in range(-LOAD_RADIUS, LOAD_RADIUS + 1):
+			var crx: int = posmod(spawn_world_chunk.x + dx, _world_data.chunk_count_x)
+			var crz: int = posmod(spawn_world_chunk.y + dz, _world_data.chunk_count_z)
+			total += 1
+			if _loaded_chunks.has(Vector2i(crx, crz)):
+				loaded += 1
+	if total == 0:
+		return 0.0
+	return float(loaded) / float(total)
+
+
+func switch_to_player_tracking() -> void:
+	_using_spawn_point = false
+	_player_chunk = Vector2i(-9999, -9999)
 
 
 func force_update() -> void:
@@ -71,11 +116,11 @@ func rewrap_remote_players() -> void:
 	var players_node := get_tree().get_first_node_in_group("players")
 	if players_node == null:
 		return
+	var ref_pos: Vector3 = _get_reference_position()
 	for child: Node in players_node.get_children():
 		if child is PlayerController and not child.is_multiplayer_authority():
 			var remote_pos: Vector3 = child.global_position
-			var local_player_pos: Vector3 = _get_player_world_position()
-			var new_pos := TorusUtils.wrap_vector3_near(remote_pos, local_player_pos, _world_data)
+			var new_pos := TorusUtils.wrap_vector3_near(remote_pos, ref_pos, _world_data)
 			child.global_position = new_pos
 
 
@@ -102,12 +147,12 @@ func _process_navmesh_queue() -> void:
 
 
 func _update_chunks() -> void:
-	var player_pos: Vector3 = _get_player_world_position()
-	var player_chunk: Vector2i = _world_to_chunk(player_pos)
+	var ref_pos: Vector3 = _get_reference_position()
+	var ref_chunk: Vector2i = _world_to_chunk(ref_pos)
 
-	if player_chunk == _player_chunk:
+	if ref_chunk == _player_chunk:
 		return
-	_player_chunk = player_chunk
+	_player_chunk = ref_chunk
 	_update_loaded_chunks()
 
 
@@ -187,11 +232,11 @@ func _populate_foliage(chunk_pos: Vector2i, chunk_data: ChunkData, world_pos: Ve
 
 
 func _chunk_to_nearest_world_position(chunk_pos: Vector2i) -> Vector2:
-	var player_pos: Vector3 = _get_player_world_position()
+	var ref_pos: Vector3 = _get_reference_position()
 	var base_x: float = float(chunk_pos.x * ChunkData.CHUNK_SIZE)
 	var base_z: float = float(chunk_pos.y * ChunkData.CHUNK_SIZE)
-	var x: float = TorusUtils.wrap_near(base_x, player_pos.x, _world_data.world_size_x)
-	var z: float = TorusUtils.wrap_near(base_z, player_pos.z, _world_data.world_size_z)
+	var x: float = TorusUtils.wrap_near(base_x, ref_pos.x, _world_data.world_size_x)
+	var z: float = TorusUtils.wrap_near(base_z, ref_pos.z, _world_data.world_size_z)
 	return Vector2(x, z)
 
 
@@ -216,7 +261,7 @@ func _unload_chunk(chunk_pos: Vector2i) -> void:
 
 
 func _update_lods() -> void:
-	var player_pos: Vector3 = _get_player_world_position()
+	var ref_pos: Vector3 = _get_reference_position()
 
 	for chunk_pos: Vector2i in _loaded_chunks.keys():
 		var chunk_node: TerrainChunk = _loaded_chunks[chunk_pos]
@@ -224,7 +269,7 @@ func _update_lods() -> void:
 		var chunk_center_z: float = chunk_node.position.z + float(ChunkData.CHUNK_SIZE) * 0.5
 		var chunk_center := Vector3(chunk_center_x, 0.0, chunk_center_z)
 
-		var diff := chunk_center - player_pos
+		var diff := chunk_center - ref_pos
 		var dist: float = diff.length()
 
 		var new_lod: int = TerrainMeshBuilder.get_lod_for_distance(dist)
@@ -233,24 +278,31 @@ func _update_lods() -> void:
 
 func _determine_lod(chunk_pos: Vector2i) -> int:
 	var world_pos: Vector2 = _chunk_to_nearest_world_position(chunk_pos)
-	var player_pos: Vector3 = _get_player_world_position()
+	var ref_pos: Vector3 = _get_reference_position()
 	var chunk_center := Vector3(
 		world_pos.x + float(ChunkData.CHUNK_SIZE) * 0.5,
 		0.0,
 		world_pos.y + float(ChunkData.CHUNK_SIZE) * 0.5
 	)
-	var diff := chunk_center - player_pos
+	var diff := chunk_center - ref_pos
 	var dist: float = diff.length()
 	return TerrainMeshBuilder.get_lod_for_distance(dist)
 
 
-func _get_player_world_position() -> Vector3:
-	var players_node := get_tree().get_first_node_in_group("players")
-	if players_node:
-		for child: Node in players_node.get_children():
-			if child is CharacterBody3D and child.is_multiplayer_authority():
-				return child.global_position
-	return Vector3.ZERO
+func _get_reference_position() -> Vector3:
+	if not _using_spawn_point:
+		var players_node := get_tree().get_first_node_in_group("players")
+		if players_node:
+			for child: Node in players_node.get_children():
+				if child is CharacterBody3D and child.is_multiplayer_authority():
+					return child.global_position
+	return _spawn_point_world_position()
+
+
+func _spawn_point_world_position() -> Vector3:
+	var x: float = float(_spawn_chunk.x * ChunkData.CHUNK_SIZE) + float(ChunkData.CHUNK_SIZE) * 0.5
+	var z: float = float(_spawn_chunk.y * ChunkData.CHUNK_SIZE) + float(ChunkData.CHUNK_SIZE) * 0.5
+	return Vector3(x, 0.0, z)
 
 
 func _world_to_chunk(pos: Vector3) -> Vector2i:

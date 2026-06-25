@@ -20,16 +20,12 @@ signal player_wrapped
 
 func _ready() -> void:
 	add_to_group("ghostable")
-	await get_tree().process_frame
 	_apply_authority()
 
 
 func _apply_authority() -> void:
 	var is_auth: bool = is_multiplayer_authority()
 	if is_auth:
-		var cam := get_node_or_null("CameraPivot/Camera3D") as Camera3D
-		if cam:
-			cam.make_current()
 		if _visuals:
 			_visuals.initialize_default_styles()
 	set_process(is_auth)
@@ -49,7 +45,6 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	var did_wrap: bool = _wrap_world_coordinates()
 	_update_camera_yaw()
-	_sync_transform_if_needed()
 	if did_wrap:
 		player_wrapped.emit()
 
@@ -104,52 +99,13 @@ func _handle_movement() -> void:
 		velocity.z = move_toward(velocity.z, 0, speed)
 
 
-func _sync_transform_if_needed() -> void:
-	if (
-		is_multiplayer_authority()
-		and multiplayer.multiplayer_peer != null
-		and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
-		and not multiplayer.get_peers().is_empty()
-	):
-		rpc("sync_transform", global_transform.origin, camera_yaw)
-
-
-func _get_world_data() -> WorldData:
-	var cm: ChunkManager = get_tree().get_first_node_in_group("chunk_manager") as ChunkManager
-	if cm:
-		return cm.get_world_data()
-	return null
-
-
-func _get_local_authority_position() -> Vector3:
-	var players_node := get_tree().get_first_node_in_group("players")
-	if players_node:
-		for child: Node in players_node.get_children():
-			if child is CharacterBody3D and child.is_multiplayer_authority():
-				return child.global_position
-	return Vector3.ZERO
-
-
-@rpc("any_peer", "unreliable")
-func sync_transform(pos: Vector3, yaw: float) -> void:
+func _unhandled_input(event: InputEvent) -> void:
 	if not is_multiplayer_authority():
-		var wd := _get_world_data()
-		if wd:
-			var ref: Vector3 = _get_local_authority_position()
-			pos = TorusUtils.wrap_vector3_near(pos, ref, wd)
-		global_transform.origin = pos
-		camera_yaw = yaw
-
-
-@rpc("authority", "reliable")
-func initial_sync(pos: Vector3, yaw: float) -> void:
-	if not is_multiplayer_authority():
-		var wd := _get_world_data()
-		if wd:
-			var ref: Vector3 = _get_local_authority_position()
-			pos = TorusUtils.wrap_vector3_near(pos, ref, wd)
-		global_transform.origin = pos
-		camera_yaw = yaw
+		return
+	if event is InputEventKey and event.pressed:
+		match event.keycode:
+			KEY_F2:
+				_randomize_equipment()
 
 
 @rpc("authority", "reliable")
@@ -168,15 +124,6 @@ func sync_equipment(styles: Dictionary) -> void:
 	for key: String in styles:
 		dup[key] = str(styles[key])
 	_visuals.equipped_styles = dup
-
-
-func _unhandled_input(event: InputEvent) -> void:
-	if not is_multiplayer_authority():
-		return
-	if event is InputEventKey and event.pressed:
-		match event.keycode:
-			KEY_F2:
-				_randomize_equipment()
 
 
 func _randomize_equipment() -> void:

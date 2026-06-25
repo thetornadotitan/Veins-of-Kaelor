@@ -18,10 +18,16 @@ func _ready() -> void:
 	_join_button.pressed.connect(_on_join_pressed)
 	_disconnect_button.pressed.connect(_on_disconnect_pressed)
 
+	if OS.has_feature("web"):
+		_host_button.disabled = true
+		_host_button.tooltip_text = "Not available in browser"
+
 	_update_ui("Disconnected")
 
 
 func _on_host_pressed() -> void:
+	if OS.has_feature("web"):
+		return
 	MultiplayerManager.host_game()
 
 
@@ -36,11 +42,7 @@ func _on_disconnect_pressed() -> void:
 
 func _on_connection_succeeded() -> void:
 	_update_ui("Connected")
-	get_tree().create_timer(1.0).timeout.connect(_change_to_world)
-
-
-func _change_to_world() -> void:
-	get_tree().change_scene_to_file("res://scenes/world/world.tscn")
+	GameStateController.begin_connecting()
 
 
 func _on_connection_failed() -> void:

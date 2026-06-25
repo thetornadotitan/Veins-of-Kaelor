@@ -13,12 +13,9 @@ var _yaw: float = 0.0
 
 
 func _ready() -> void:
-	await get_tree().process_frame
 	var is_auth: bool = is_multiplayer_authority()
 	set_process(is_auth)
 	set_process_unhandled_input(is_auth)
-	if is_auth:
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
 func _unhandled_input(event: InputEvent) -> void:
