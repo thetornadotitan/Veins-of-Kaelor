@@ -41,16 +41,18 @@ func set_world_position(world_x: float, world_z: float) -> void:
 
 
 func _ready() -> void:
-	print("[TerrainChunk] _ready pos=%s chunk=(%d,%d) mesh=%s surfaces=%d" % [
-		position, _chunk_data.chunk_rx, _chunk_data.chunk_rz,
-		_mesh_instance.mesh != null, _mesh_instance.mesh.get_surface_count() if _mesh_instance.mesh else 0
-	])
+	var cm: ChunkManager = get_tree().get_first_node_in_group("chunk_manager") as ChunkManager
+	if cm:
+		cm.queue_navmesh_bake(self)
+
+
+func bake_navmesh_now() -> void:
 	_bake_navmesh.call_deferred()
 
 
 func _bake_navmesh() -> void:
 	var gen := NavMeshGenerator.new()
-	var navmesh: NavigationMesh = await gen.build_navmesh(_chunk_data, self)
+	var navmesh: NavigationMesh = await gen.build_navmesh(self)
 	if is_inside_tree() and _nav_region:
 		_nav_region.navigation_mesh = navmesh
 		_nav_ready = true

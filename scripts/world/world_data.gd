@@ -12,6 +12,7 @@ var torus_radius: float = 1.0
 var generation_params: NoiseParams
 
 var _cached_regions: Dictionary = {}
+var _threaded_loads: Dictionary = {}
 
 var world_size_x: float:
 	get:
@@ -85,22 +86,68 @@ func clear_cache() -> void:
 	_cached_regions.clear()
 
 
+func has_cached_region(key: Vector2i) -> bool:
+	return _cached_regions.has(key)
+
+
+func request_threaded_load(key: Vector2i) -> void:
+	if _cached_regions.has(key) or _threaded_loads.has(key):
+		return
+	var path := get_region_path(key.x, key.y)
+	if not ResourceLoader.exists(path):
+		return
+	ResourceLoader.load_threaded_request(path)
+	_threaded_loads[key] = path
+
+
+func is_region_ready_for(chunk_rx: int, chunk_rz: int) -> bool:
+	var wrx: int = posmod(chunk_rx, chunk_count_x)
+	var wrz: int = posmod(chunk_rz, chunk_count_z)
+	var rrx: int = floori(wrx / float(region_size))
+	var rrz: int = floori(wrz / float(region_size))
+	var key := Vector2i(rrx, rrz)
+	if _cached_regions.has(key):
+		return true
+	if not _threaded_loads.has(key):
+		return false
+	var path: String = _threaded_loads[key]
+	var status: int = ResourceLoader.load_threaded_get_status(path)
+	if status == ResourceLoader.THREAD_LOAD_LOADED:
+		var region: RegionData = ResourceLoader.load_threaded_get(path)
+		if region != null:
+			_cached_regions[key] = region
+			_threaded_loads.erase(key)
+			return true
+		_threaded_loads.erase(key)
+		return false
+	if status == ResourceLoader.THREAD_LOAD_FAILED:
+		_threaded_loads.erase(key)
+		return false
+	return false
+
+
 func _load_region(rrx: int, rrz: int) -> RegionData:
 	var key := Vector2i(rrx, rrz)
 	if _cached_regions.has(key):
 		return _cached_regions[key]
+	if _threaded_loads.has(key):
+		var treaded_path: String = _threaded_loads[key]
+		var status: int = ResourceLoader.load_threaded_get_status(treaded_path)
+		if status == ResourceLoader.THREAD_LOAD_LOADED:
+			var treaded_region: RegionData = ResourceLoader.load_threaded_get(treaded_path)
+			if treaded_region != null:
+				_cached_regions[key] = treaded_region
+				_threaded_loads.erase(key)
+				return treaded_region
+			_threaded_loads.erase(key)
+			return null
 	var path := get_region_path(rrx, rrz)
 	if not ResourceLoader.exists(path):
-		push_error("WorldData: region file not found: %s" % path)
 		return null
 	var region: RegionData = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REUSE)
 	if region == null:
-		push_error("WorldData: failed to load region: %s" % path)
 		return null
 	_cached_regions[key] = region
-	print("[WorldData] Loaded region (%d,%d): rx=%d rz=%d heightmaps=%d" % [
-		rrx, rrz, region.region_rx, region.region_rz, region.chunk_heightmaps.size()
-	])
 	return region
 
 

@@ -12,18 +12,19 @@ var _signaling: Node = null
 var _rtc_mp: WebRTCMultiplayerPeer = null
 var _ws: WebSocketPeer = null
 var _my_id: int = 0
-var _mesh: bool = true
-var _pending_candidates: Dictionary = {}  # peer_id -> Array[String]
-var _remote_desc_set: Dictionary = {}  # peer_id -> bool
+var _pending_candidates: Dictionary = {}
+var _remote_desc_set: Dictionary = {}
+var _connected_peers: Dictionary = {}
+var _is_host: bool = false
 
 
 func _on_mp_peer_connected(peer_id: int) -> void:
-	print("Multiplayer: Peer %d connected (WebRTC data channel)" % peer_id)
+	_connected_peers[peer_id] = true
 	peer_connected.emit(peer_id)
 
 
 func _on_mp_peer_disconnected(peer_id: int) -> void:
-	print("Multiplayer: Peer %d disconnected" % peer_id)
+	_connected_peers.erase(peer_id)
 	peer_disconnected.emit(peer_id)
 
 
@@ -35,7 +36,6 @@ func _ready() -> void:
 
 
 func _start_dedicated_server() -> void:
-	print("Starting dedicated signaling server on port %d..." % signaling_port)
 	_signaling = SignalingServer.new()
 	_signaling.name = "SignalingServer"
 	add_child(_signaling)
@@ -50,6 +50,8 @@ func host_game() -> void:
 	if is_peer_connected():
 		disconnect_game()
 
+	_is_host = true
+
 	_signaling = SignalingServer.new()
 	_signaling.name = "SignalingServer"
 	add_child(_signaling)
@@ -59,7 +61,6 @@ func host_game() -> void:
 		_signaling = null
 		connection_failed.emit()
 		return
-	print("Signaling server started on port %d" % signaling_port)
 
 	_ws = WebSocketPeer.new()
 	var err := _ws.connect_to_url("ws://127.0.0.1:%d" % signaling_port)
@@ -70,14 +71,13 @@ func host_game() -> void:
 		return
 
 	set_process(true)
-	print("Host: Connected to signaling server, waiting for ID...")
 
 
 func join_game() -> void:
 	if is_peer_connected():
 		disconnect_game()
 
-	_mesh = true
+	_is_host = false
 
 	_ws = WebSocketPeer.new()
 	var err := _ws.connect_to_url("ws://%s:%d" % [signaling_address, signaling_port])
@@ -88,7 +88,6 @@ func join_game() -> void:
 		return
 
 	set_process(true)
-	print("Client: Connecting to signaling server...")
 
 
 func disconnect_game() -> void:
@@ -109,8 +108,10 @@ func _teardown() -> void:
 		_signaling = null
 	multiplayer.multiplayer_peer = null
 	_my_id = 0
+	_is_host = false
 	_pending_candidates.clear()
 	_remote_desc_set.clear()
+	_connected_peers.clear()
 
 
 func is_peer_connected() -> bool:
@@ -122,13 +123,17 @@ func get_my_id() -> int:
 
 
 func is_host() -> bool:
-	return _signaling != null
+	return _is_host
 
 
 func get_peer_count() -> int:
 	if not is_peer_connected():
 		return 0
-	return multiplayer.get_peers().size() + 1
+	return _connected_peers.size() + 1
+
+
+func is_peer_webrtc_connected(peer_id: int) -> bool:
+	return _connected_peers.has(peer_id)
 
 
 func _process(_delta: float) -> void:
@@ -156,26 +161,17 @@ func _handle_signaling_message(text: String) -> void:
 	var from_id: int = msg.get("id", 0)
 	var data: String = msg.get("data", "")
 
-	print("Signaling: received type=%s from=%d" % [msg_type, from_id])
-
 	match msg_type:
 		"ID":
 			if _my_id == 0:
 				_my_id = data.to_int()
-				print("Signaling: Assigned ID %d" % _my_id)
 				_rtc_mp = WebRTCMultiplayerPeer.new()
-				if _mesh:
-					_rtc_mp.create_mesh(_my_id)
-				elif _my_id == 1:
-					_rtc_mp.create_server()
-				else:
-					_rtc_mp.create_client(_my_id)
+				_rtc_mp.create_mesh(_my_id)
 				multiplayer.multiplayer_peer = _rtc_mp
 				_send("JOIN", 0, "")
 				connection_succeeded.emit()
 		"JOIN":
 			if from_id != _my_id and from_id > 0:
-				print("Signaling: Peer %d joined" % from_id)
 				_create_webrtc_peer(from_id)
 		"OFFER":
 			_handle_offer(from_id, data)
@@ -196,8 +192,7 @@ func _create_webrtc_peer(peer_id: int) -> void:
 
 	peer.session_description_created.connect(
 		func(type: String, sdp: String):
-			var msg_type_upper: String = type.to_upper()
-			_send(msg_type_upper, peer_id, sdp)
+			_send(type.to_upper(), peer_id, sdp)
 			if type == "offer" or type == "answer":
 				peer.set_local_description(type, sdp)
 	)
@@ -211,23 +206,18 @@ func _create_webrtc_peer(peer_id: int) -> void:
 	if err != OK:
 		push_error("WebRTC: Failed to add peer %d: %s" % [peer_id, error_string(err)])
 		return
-	print("WebRTC: Added peer %d to multiplayer peer" % peer_id)
 
 	if _my_id < peer_id:
-		# Only create an offer if the connection is still in the NEW state.
 		if peer.get_connection_state() == WebRTCPeerConnection.STATE_NEW:
 			peer.create_offer()
-		else:
-			push_warning("WebRTC: Skipping create_offer for peer %d – connection not in NEW state" % peer_id)
 
 
 func _handle_offer(from_id: int, sdp: String) -> void:
-	print("WebRTC: OFFER from %d" % from_id)
 	if not _rtc_mp:
 		return
 	if not _rtc_mp.has_peer(from_id):
 		_create_webrtc_peer(from_id)
-	if _rtc_mp:
+	if _rtc_mp and _rtc_mp.has_peer(from_id):
 		var peer_dict: Dictionary = _rtc_mp.get_peer(from_id)
 		if peer_dict.has("connection"):
 			peer_dict.connection.set_remote_description("offer", sdp)
@@ -236,7 +226,6 @@ func _handle_offer(from_id: int, sdp: String) -> void:
 
 
 func _handle_answer(from_id: int, sdp: String) -> void:
-	print("WebRTC: ANSWER from %d" % from_id)
 	if _rtc_mp:
 		var peer_dict: Dictionary = _rtc_mp.get_peer(from_id)
 		if peer_dict.has("connection"):
@@ -263,7 +252,6 @@ func _buffer_candidate(peer_id: int, data: String) -> void:
 	if not _pending_candidates.has(peer_id):
 		_pending_candidates[peer_id] = []
 	_pending_candidates[peer_id].append(data)
-	print("WebRTC: Buffered candidate for peer %d (total: %d)" % [peer_id, _pending_candidates[peer_id].size()])
 
 
 func _apply_candidate(peer_id: int, data: String) -> void:
@@ -274,14 +262,12 @@ func _apply_candidate(peer_id: int, data: String) -> void:
 		var parts: PackedStringArray = data.split("\n", false, 1)
 		if parts.size() >= 2:
 			peer_dict.connection.add_ice_candidate(parts[0], 0, parts[1])
-			print("WebRTC: Applied ICE candidate for peer %d" % peer_id)
 
 
 func _flush_pending_candidates(peer_id: int) -> void:
 	if not _pending_candidates.has(peer_id):
 		return
 	var candidates: Array = _pending_candidates[peer_id]
-	print("WebRTC: Flushing %d buffered candidate(s) for peer %d" % [candidates.size(), peer_id])
 	for candidate: String in candidates:
 		_apply_candidate(peer_id, candidate)
 	_pending_candidates.erase(peer_id)

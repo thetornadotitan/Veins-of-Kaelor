@@ -106,7 +106,17 @@ func _handle_message(from_id: int, text: String) -> void:
 	var data: String = msg.get("data", "")
 
 	match msg_type:
-		"JOIN", "OFFER", "ANSWER", "CANDIDATE":
+		"JOIN":
+			_relay(from_id, 0, "JOIN", data)
+			var known_peers: String = ""
+			for other_id: int in _peers:
+				if other_id != from_id:
+					if known_peers != "":
+						known_peers += ","
+					known_peers += str(other_id)
+			if known_peers != "":
+				_send_to(from_id, "PEER_LIST", 1, known_peers)
+		"OFFER", "ANSWER", "CANDIDATE", "PEER_LIST":
 			_relay(from_id, to_id, msg_type, data)
 
 

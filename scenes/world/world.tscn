@@ -3,9 +3,9 @@
 [ext_resource type="Script" uid="uid://bgaj4jccrgmm7" path="res://scripts/world/world_manager.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://boiqe1swec8rh" path="res://scenes/entities/player.tscn" id="2"]
 [ext_resource type="Script" uid="uid://v7c7gyjcjhcb" path="res://scripts/ui/hud.gd" id="3"]
-[ext_resource type="Script" uid="uid://bfpbjonebkwpv" path="res://scripts/world/chunk_manager.gd" id="4"]
 [ext_resource type="Script" uid="uid://kmyq8dr0ubty" path="res://scripts/world/foliage_renderer.gd" id="5"]
 [ext_resource type="Script" uid="uid://14jf8p636crr" path="res://scripts/world/water_plane.gd" id="6"]
+[ext_resource type="Script" uid="uid://bfpbjonebkwpv" path="res://scripts/world/chunk_manager.gd" id="10"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_top_color = Color(0.3, 0.5, 0.8, 1)
@@ -24,24 +24,17 @@ ambient_light_energy = 0.5
 
 [node name="World" type="Node3D" unique_id=1351303377]
 
+[node name="ChunkManager" type="Node3D" parent="." unique_id=998877111]
+script = ExtResource("10")
+
+[node name="TerrainRoot" type="Node3D" parent="ChunkManager" unique_id=998877222]
+unique_name_in_owner = true
+
 [node name="WorldManager" type="Node" parent="." unique_id=732630033]
 script = ExtResource("1")
 player_scene = ExtResource("2")
 
 [node name="Players" type="Node3D" parent="." unique_id=1452789325]
-unique_name_in_owner = true
-
-[node name="Environment" type="WorldEnvironment" parent="." unique_id=1114039534]
-environment = SubResource("env")
-
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1559175652]
-transform = Transform3D(0.707107, -0.5, 0.5, 0, 0.707107, 0.707107, -0.707107, -0.5, 0.5, 0, 10, 0)
-shadow_enabled = true
-
-[node name="ChunkManager" type="Node3D" parent="." unique_id=1653297619]
-script = ExtResource("4")
-
-[node name="TerrainRoot" type="Node3D" parent="ChunkManager" unique_id=1456226814]
 unique_name_in_owner = true
 
 [node name="FoliageRenderer" type="Node3D" parent="." unique_id=853463509]
@@ -90,3 +83,10 @@ text = "Region: -"
 
 [node name="HudScript" type="Node" parent="HUD" unique_id=636792833]
 script = ExtResource("3")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1478037365]
+environment = SubResource("env")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1077678742]
+transform = Transform3D(0.707107, -0.5, 0.5, 0, 0.707107, 0.707107, -0.707107, -0.5, 0.5, 0, 10, 0)
+shadow_enabled = true

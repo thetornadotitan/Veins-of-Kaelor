@@ -41,7 +41,8 @@ static func generate_chunk_heightmap(
 ) -> PackedFloat32Array:
 	var heightmap := PackedFloat32Array()
 	var res: int = ChunkData.GRID_RESOLUTION
-	heightmap.resize(res * res)
+	var sr: int = res + 2
+	heightmap.resize(sr * sr)
 
 	var base_x: float = float(chunk_rx * ChunkData.CHUNK_SIZE)
 	var base_z: float = float(chunk_rz * ChunkData.CHUNK_SIZE)
@@ -51,10 +52,10 @@ static func generate_chunk_heightmap(
 	var mo: float = params.mountain_mask_offset
 	var d_off: float = params.detail_offset
 
-	for lz: int in range(res):
-		for lx: int in range(res):
-			var wx: float = base_x + float(lx)
-			var wz: float = base_z + float(lz)
+	for lz: int in range(sr):
+		for lx: int in range(sr):
+			var wx: float = base_x + float(lx - 1)
+			var wz: float = base_z + float(lz - 1)
 
 			var nx: float = torus_radius * cos(two_pi_over_size * wx)
 			var ny: float = torus_radius * sin(two_pi_over_size * wx)
@@ -93,6 +94,6 @@ static func generate_chunk_heightmap(
 			elevation += detail * params.detail_weight
 			elevation = pow(maxf(0.0, elevation), params.power_exponent)
 
-			heightmap[lz * res + lx] = (elevation * 0.5 + 0.5) * (params.height_range_max - params.height_range_min) + params.height_range_min
+			heightmap[lz * sr + lx] = (elevation * 0.5 + 0.5) * (params.height_range_max - params.height_range_min) + params.height_range_min
 
 	return heightmap

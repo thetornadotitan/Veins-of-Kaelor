@@ -20,12 +20,25 @@ signal player_wrapped
 
 func _ready() -> void:
 	add_to_group("ghostable")
-	set_physics_process(is_multiplayer_authority())
-	if _visuals and is_multiplayer_authority():
-		_visuals.initialize_default_styles()
+	await get_tree().process_frame
+	_apply_authority()
+
+
+func _apply_authority() -> void:
+	var is_auth: bool = is_multiplayer_authority()
+	if is_auth:
+		var cam := get_node_or_null("CameraPivot/Camera3D") as Camera3D
+		if cam:
+			cam.make_current()
+		if _visuals:
+			_visuals.initialize_default_styles()
+	set_process(is_auth)
+	set_physics_process(is_auth)
 
 
 func _physics_process(delta: float) -> void:
+	if not is_multiplayer_authority():
+		return
 	_update_swimming_state()
 	if is_swimming:
 		_process_swimming(delta)
