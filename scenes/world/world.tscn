@@ -27,9 +27,6 @@ ambient_light_energy = 0.5
 [node name="ChunkManager" type="Node3D" parent="." unique_id=998877111]
 script = ExtResource("10")
 
-[node name="TerrainRoot" type="Node3D" parent="ChunkManager" unique_id=998877222]
-unique_name_in_owner = true
-
 [node name="WorldManager" type="Node" parent="." unique_id=732630033]
 script = ExtResource("1")
 player_scene = ExtResource("2")

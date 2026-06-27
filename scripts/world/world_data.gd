@@ -13,6 +13,8 @@ var generation_params: NoiseParams
 
 var _cached_regions: Dictionary = {}
 var _threaded_loads: Dictionary = {}
+var _threaded_load_start: Dictionary = {}
+
 
 var world_size_x: float:
 	get:
@@ -98,6 +100,7 @@ func request_threaded_load(key: Vector2i) -> void:
 		return
 	ResourceLoader.load_threaded_request(path)
 	_threaded_loads[key] = path
+	_threaded_load_start[key] = Time.get_ticks_msec()
 
 
 func is_region_ready_for(chunk_rx: int, chunk_rz: int) -> bool:
@@ -117,6 +120,9 @@ func is_region_ready_for(chunk_rx: int, chunk_rz: int) -> bool:
 		if region != null:
 			_cached_regions[key] = region
 			_threaded_loads.erase(key)
+			var start_msec: float = _threaded_load_start.get(key, 0.0)
+			_threaded_load_start.erase(key)
+			print("[WD-TIME] region(%d,%d) loaded in %.0f ms" % [key.x, key.y, Time.get_ticks_msec() - start_msec])
 			return true
 		_threaded_loads.erase(key)
 		return false
@@ -138,17 +144,24 @@ func _load_region(rrx: int, rrz: int) -> RegionData:
 			if treaded_region != null:
 				_cached_regions[key] = treaded_region
 				_threaded_loads.erase(key)
+				var start_msec: float = _threaded_load_start.get(key, 0.0)
+				_threaded_load_start.erase(key)
+				print("[WD-TIME] region(%d,%d) loaded via _load_region in %.0f ms" % [key.x, key.y, Time.get_ticks_msec() - start_msec])
 				return treaded_region
 			_threaded_loads.erase(key)
 			return null
+		if status == ResourceLoader.THREAD_LOAD_FAILED:
+			_threaded_loads.erase(key)
+			_threaded_load_start.erase(key)
+			return null
+		return null
 	var path := get_region_path(rrx, rrz)
 	if not ResourceLoader.exists(path):
 		return null
-	var region: RegionData = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REUSE)
-	if region == null:
-		return null
-	_cached_regions[key] = region
-	return region
+	ResourceLoader.load_threaded_request(path)
+	_threaded_loads[key] = path
+	_threaded_load_start[key] = Time.get_ticks_msec()
+	return null
 
 
 func get_needed_regions_for_chunk(chunk_rx: int, chunk_rz: int, _radius: int) -> Array[Vector2i]:

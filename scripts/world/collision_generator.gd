@@ -3,7 +3,7 @@ class_name CollisionGenerator
 extends RefCounted
 
 
-static func build_collision_shape(chunk_data: ChunkData) -> ConcavePolygonShape3D:
+static func build_collision_faces(chunk_data: ChunkData) -> PackedVector3Array:
 	var resolution: int = ChunkData.GRID_RESOLUTION
 	var sr: int = ChunkData.SAMPLE_RESOLUTION
 	var faces := PackedVector3Array()
@@ -25,6 +25,11 @@ static func build_collision_shape(chunk_data: ChunkData) -> ConcavePolygonShape3
 			faces.append(v11)
 			faces.append(v01)
 
+	return faces
+
+
+static func build_collision_shape(chunk_data: ChunkData) -> ConcavePolygonShape3D:
+	var faces: PackedVector3Array = build_collision_faces(chunk_data)
 	var shape := ConcavePolygonShape3D.new()
 	shape.set_faces(faces)
 	return shape

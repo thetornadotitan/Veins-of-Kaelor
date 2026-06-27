@@ -34,13 +34,30 @@ static func _in_border(v: int, res: int, b: int) -> bool:
 	return v < b or v >= res - 1 - b
 
 
-static func _emit_quad(st: SurfaceTool, v00: Vector3, v10: Vector3, v01: Vector3, v11: Vector3, n00: Vector3, n10: Vector3, n01: Vector3, n11: Vector3, uv00: Vector2, uv10: Vector2, uv01: Vector2, uv11: Vector2, color: Color) -> void:
-	st.set_uv(uv00); st.set_color(color); st.set_normal(n00); st.add_vertex(v00)
-	st.set_uv(uv10); st.set_color(color); st.set_normal(n10); st.add_vertex(v10)
-	st.set_uv(uv01); st.set_color(color); st.set_normal(n01); st.add_vertex(v01)
-	st.set_uv(uv10); st.set_color(color); st.set_normal(n10); st.add_vertex(v10)
-	st.set_uv(uv11); st.set_color(color); st.set_normal(n11); st.add_vertex(v11)
-	st.set_uv(uv01); st.set_color(color); st.set_normal(n01); st.add_vertex(v01)
+static func _emit_quad_arrays(verts: PackedVector3Array, normals_arr: PackedVector3Array, uvs: PackedVector2Array, colors: PackedColorArray, indices: PackedInt32Array, v00: Vector3, v10: Vector3, v01: Vector3, v11: Vector3, n00: Vector3, n10: Vector3, n01: Vector3, n11: Vector3, uv00: Vector2, uv10: Vector2, uv01: Vector2, uv11: Vector2, color: Color) -> void:
+	var base: int = verts.size()
+	verts.append(v00)
+	verts.append(v10)
+	verts.append(v01)
+	verts.append(v11)
+	normals_arr.append(n00)
+	normals_arr.append(n10)
+	normals_arr.append(n01)
+	normals_arr.append(n11)
+	uvs.append(uv00)
+	uvs.append(uv10)
+	uvs.append(uv01)
+	uvs.append(uv11)
+	colors.append(color)
+	colors.append(color)
+	colors.append(color)
+	colors.append(color)
+	indices.append(base)
+	indices.append(base + 1)
+	indices.append(base + 2)
+	indices.append(base + 1)
+	indices.append(base + 3)
+	indices.append(base + 2)
 
 
 static func _precompute_normals(chunk_data: ChunkData, res: int) -> Array:
@@ -54,24 +71,26 @@ static func _precompute_normals(chunk_data: ChunkData, res: int) -> Array:
 		normals[iz] = row
 	return normals
 
-static func build_chunk_mesh(chunk_data: ChunkData, lod: int) -> ArrayMesh:
+static func build_chunk_mesh_arrays(chunk_data: ChunkData, lod: int) -> Dictionary:
 	var res: int = ChunkData.GRID_RESOLUTION
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-
 	var color: Color = BIOME_COLORS.get(chunk_data.biome, BIOME_COLORS[0])
 	var hm: PackedFloat32Array = chunk_data.heightmap
 
 	if hm.is_empty() or hm.size() < (res + 2) * (res + 2):
 		push_error("[TerrainMeshBuilder] heightmap invalid for chunk (%d,%d)" % [chunk_data.chunk_rx, chunk_data.chunk_rz])
-		return st.commit()
+		return {}
 
-	# Pre‑compute normals for the entire chunk to avoid repeated heightmap sampling.
 	var pre_normals: Array = _precompute_normals(chunk_data, res)
 
 	var spacing: int = 1 << lod
 	var b: int = BORDER_WIDTH
 	var rf: float = float(res)
+
+	var verts := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var colors := PackedColorArray()
+	var indices := PackedInt32Array()
 
 	var lz: int = 0
 	while lz < res - 1:
@@ -82,32 +101,68 @@ static func build_chunk_mesh(chunk_data: ChunkData, lod: int) -> ArrayMesh:
 			var nx: int = mini(lx + step, res - 1)
 			var nz: int = mini(lz + step_z, res - 1)
 
-			# Retrieve pre‑computed normals for the four vertices.
 			var n00: Vector3 = pre_normals[lz][lx]
 			var n10: Vector3 = pre_normals[lz][nx]
 			var n01: Vector3 = pre_normals[nz][lx]
 			var n11: Vector3 = pre_normals[nz][nx]
 
-			_emit_quad(st,
-				Vector3(float(lx), _h(hm, lx, lz, res), float(lz)),
-				Vector3(float(nx), _h(hm, nx, lz, res), float(lz)),
-				Vector3(float(lx), _h(hm, lx, nz, res), float(nz)),
-				Vector3(float(nx), _h(hm, nx, nz, res), float(nz)),
-				n00,
-				n10,
-				n01,
-				n11,
-				_uv(float(lx), float(lz), rf),
-				_uv(float(nx), float(lz), rf),
-				_uv(float(lx), float(nz), rf),
-				_uv(float(nx), float(nz), rf),
-				color)
+			var base: int = verts.size()
+			verts.append(Vector3(float(lx), _h(hm, lx, lz, res), float(lz)))
+			verts.append(Vector3(float(nx), _h(hm, nx, lz, res), float(lz)))
+			verts.append(Vector3(float(lx), _h(hm, lx, nz, res), float(nz)))
+			verts.append(Vector3(float(nx), _h(hm, nx, nz, res), float(nz)))
+			normals.append(n00)
+			normals.append(n10)
+			normals.append(n01)
+			normals.append(n11)
+			uvs.append(_uv(float(lx), float(lz), rf))
+			uvs.append(_uv(float(nx), float(lz), rf))
+			uvs.append(_uv(float(lx), float(nz), rf))
+			uvs.append(_uv(float(nx), float(nz), rf))
+			colors.append(color)
+			colors.append(color)
+			colors.append(color)
+			colors.append(color)
+			indices.append(base)
+			indices.append(base + 1)
+			indices.append(base + 2)
+			indices.append(base + 1)
+			indices.append(base + 3)
+			indices.append(base + 2)
+
 			lx += step
 		lz += step_z
 
-	_build_skirt(st, hm, res, color, pre_normals)
+	_build_skirt_arrays(verts, normals, uvs, colors, indices, hm, res, color, pre_normals)
 
-	return st.commit()
+	return {
+		"verts": verts,
+		"normals": normals,
+		"uvs": uvs,
+		"colors": colors,
+		"indices": indices,
+	}
+
+
+static func build_chunk_mesh(chunk_data: ChunkData, lod: int) -> ArrayMesh:
+	var data: Dictionary = build_chunk_mesh_arrays(chunk_data, lod)
+	if data.is_empty():
+		var mesh := ArrayMesh.new()
+		return mesh
+	return _arrays_to_mesh(data)
+
+
+static func _arrays_to_mesh(data: Dictionary) -> ArrayMesh:
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = data["verts"]
+	arrays[Mesh.ARRAY_NORMAL] = data["normals"]
+	arrays[Mesh.ARRAY_TEX_UV] = data["uvs"]
+	arrays[Mesh.ARRAY_COLOR] = data["colors"]
+	arrays[Mesh.ARRAY_INDEX] = data["indices"]
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
 
 
 static func _row_step(lz: int, spacing: int, b: int, res: int) -> int:
@@ -135,65 +190,45 @@ static func _uv(x: float, z: float, res: float) -> Vector2:
 	return Vector2(x / (res - 1.0), z / (res - 1.0))
 
 
-static func _build_skirt(st: SurfaceTool, hm: PackedFloat32Array, res: int, color: Color, pre_normals: Array) -> void:
+static func _build_skirt_arrays(verts: PackedVector3Array, normals_arr: PackedVector3Array, uvs: PackedVector2Array, colors: PackedColorArray, indices: PackedInt32Array, hm: PackedFloat32Array, res: int, color: Color, pre_normals: Array) -> void:
 	var rf: float = float(res)
 	for lx: int in range(res - 1):
 		var h0: float = _h(hm, lx, 0, res)
 		var h1: float = _h(hm, lx + 1, 0, res)
-		_emit_quad(st,
-			Vector3(float(lx), h0, 0.0),
-			Vector3(float(lx + 1), h1, 0.0),
-			Vector3(float(lx), h0 - SKIRT_DROP, 0.0),
-			Vector3(float(lx + 1), h1 - SKIRT_DROP, 0.0),
-			pre_normals[0][lx],
-			pre_normals[0][lx + 1],
-			pre_normals[0][lx],
-			pre_normals[0][lx + 1],
+		_emit_quad_arrays(verts, normals_arr, uvs, colors, indices,
+			Vector3(float(lx), h0, 0.0), Vector3(float(lx + 1), h1, 0.0),
+			Vector3(float(lx), h0 - SKIRT_DROP, 0.0), Vector3(float(lx + 1), h1 - SKIRT_DROP, 0.0),
+			pre_normals[0][lx], pre_normals[0][lx + 1], pre_normals[0][lx], pre_normals[0][lx + 1],
 			_uv(float(lx), 0.0, rf), _uv(float(lx + 1), 0.0, rf),
 			_uv(float(lx), 0.0, rf), _uv(float(lx + 1), 0.0, rf),
 			color)
 	for lx: int in range(res - 1):
 		var h0: float = _h(hm, lx, res - 1, res)
 		var h1: float = _h(hm, lx + 1, res - 1, res)
-		_emit_quad(st,
-			Vector3(float(lx), h0, float(res - 1)),
-			Vector3(float(lx + 1), h1, float(res - 1)),
-			Vector3(float(lx), h0 - SKIRT_DROP, float(res - 1)),
-			Vector3(float(lx + 1), h1 - SKIRT_DROP, float(res - 1)),
-			pre_normals[res - 1][lx],
-			pre_normals[res - 1][lx + 1],
-			pre_normals[res - 1][lx],
-			pre_normals[res - 1][lx + 1],
+		_emit_quad_arrays(verts, normals_arr, uvs, colors, indices,
+			Vector3(float(lx), h0, float(res - 1)), Vector3(float(lx + 1), h1, float(res - 1)),
+			Vector3(float(lx), h0 - SKIRT_DROP, float(res - 1)), Vector3(float(lx + 1), h1 - SKIRT_DROP, float(res - 1)),
+			pre_normals[res - 1][lx], pre_normals[res - 1][lx + 1], pre_normals[res - 1][lx], pre_normals[res - 1][lx + 1],
 			_uv(float(lx), 1.0, rf), _uv(float(lx + 1), 1.0, rf),
 			_uv(float(lx), 1.0, rf), _uv(float(lx + 1), 1.0, rf),
 			color)
 	for lz: int in range(res - 1):
 		var h0: float = _h(hm, 0, lz, res)
 		var h1: float = _h(hm, 0, lz + 1, res)
-		_emit_quad(st,
-			Vector3(0.0, h0, float(lz)),
-			Vector3(0.0, h1, float(lz + 1)),
-			Vector3(0.0, h0 - SKIRT_DROP, float(lz)),
-			Vector3(0.0, h1 - SKIRT_DROP, float(lz + 1)),
-			pre_normals[lz][0],
-			pre_normals[lz + 1][0],
-			pre_normals[lz][0],
-			pre_normals[lz + 1][0],
+		_emit_quad_arrays(verts, normals_arr, uvs, colors, indices,
+			Vector3(0.0, h0, float(lz)), Vector3(0.0, h1, float(lz + 1)),
+			Vector3(0.0, h0 - SKIRT_DROP, float(lz)), Vector3(0.0, h1 - SKIRT_DROP, float(lz + 1)),
+			pre_normals[lz][0], pre_normals[lz + 1][0], pre_normals[lz][0], pre_normals[lz + 1][0],
 			_uv(0.0, float(lz), rf), _uv(0.0, float(lz + 1), rf),
 			_uv(0.0, float(lz), rf), _uv(0.0, float(lz + 1), rf),
 			color)
 	for lz: int in range(res - 1):
 		var h0: float = _h(hm, res - 1, lz, res)
 		var h1: float = _h(hm, res - 1, lz + 1, res)
-		_emit_quad(st,
-			Vector3(float(res - 1), h0, float(lz)),
-			Vector3(float(res - 1), h1, float(lz + 1)),
-			Vector3(float(res - 1), h0 - SKIRT_DROP, float(lz)),
-			Vector3(float(res - 1), h1 - SKIRT_DROP, float(lz + 1)),
-			pre_normals[lz][res - 1],
-			pre_normals[lz + 1][res - 1],
-			pre_normals[lz][res - 1],
-			pre_normals[lz + 1][res - 1],
+		_emit_quad_arrays(verts, normals_arr, uvs, colors, indices,
+			Vector3(float(res - 1), h0, float(lz)), Vector3(float(res - 1), h1, float(lz + 1)),
+			Vector3(float(res - 1), h0 - SKIRT_DROP, float(lz)), Vector3(float(res - 1), h1 - SKIRT_DROP, float(lz + 1)),
+			pre_normals[lz][res - 1], pre_normals[lz + 1][res - 1], pre_normals[lz][res - 1], pre_normals[lz + 1][res - 1],
 			_uv(1.0, float(lz), rf), _uv(1.0, float(lz + 1), rf),
 			_uv(1.0, float(lz), rf), _uv(1.0, float(lz + 1), rf),
 			color)

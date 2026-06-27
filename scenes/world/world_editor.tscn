@@ -188,6 +188,11 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "Generate World"
 
+[node name="RebakeNavmeshBtn" type="Button" parent="MarginContainer/ScrollContainer/VBoxContainer" unique_id=552963811]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Re-bake Navmeshes"
+
 [node name="ProgressBar" type="ProgressBar" parent="MarginContainer/ScrollContainer/VBoxContainer" unique_id=1252722750]
 unique_name_in_owner = true
 layout_mode = 2
@@ -202,3 +207,4 @@ text = "Ready"
 [connection signal="value_changed" from="MarginContainer/ScrollContainer/VBoxContainer/PersistenceHBox/PersistenceSlider" to="." method="_on_persistence_changed"]
 [connection signal="value_changed" from="MarginContainer/ScrollContainer/VBoxContainer/LacunarityHBox/LacunaritySlider" to="." method="_on_lacunarity_changed"]
 [connection signal="pressed" from="MarginContainer/ScrollContainer/VBoxContainer/GenerateBtn" to="." method="_on_generate_btn_pressed"]
+[connection signal="pressed" from="MarginContainer/ScrollContainer/VBoxContainer/RebakeNavmeshBtn" to="." method="_on_rebake_navmesh_btn_pressed"]
