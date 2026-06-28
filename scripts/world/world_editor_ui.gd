@@ -17,6 +17,7 @@ extends Control
 @onready var _progress_bar: ProgressBar = %ProgressBar
 @onready var _log_label: Label = %LogLabel
 @onready var _backend_label: Label = %BackendLabel
+@onready var _status_label: Label = %StatusLabel
 
 var _generating: bool = false
 
@@ -34,6 +35,7 @@ func _on_generate_btn_pressed() -> void:
 	_generate_btn.disabled = true
 	_rebake_navmesh_btn.disabled = true
 	_log_label.text = "Generating world..."
+	_status_label.text = ""
 
 	var config := WorldGenConfig.new()
 	config.seed_value = int(_seed_input.value)
@@ -54,6 +56,7 @@ func _on_generate_btn_pressed() -> void:
 	generator.progress_changed.connect(_on_progress)
 	generator.generation_complete.connect(_on_complete)
 	generator.navmesh_progress.connect(_on_navmesh_progress)
+	generator.step_progress.connect(_on_step_progress)
 	await generator.generate_world(config)
 
 
@@ -67,11 +70,21 @@ func _on_progress(ratio: float, stage: String) -> void:
 		_log_label.text = "Generating terrain... %d%%" % int(terrain_pct)
 
 
+func _on_step_progress(stage: String, done: int, total: int, chunk_x: int, chunk_z: int, elapsed_sec: float, remaining_sec: float) -> void:
+	var remaining: int = total - done
+	var pct: float = (float(done) / float(total)) * 100.0
+	var eta: String = _format_duration(remaining_sec)
+	var stage_name: String = "Terrain" if stage == "terrain" else "Navmesh"
+	_status_label.text = "%s: chunk (%d,%d) — %d/%d done (%.1f%%) — %d left — ETA %s" % [
+		stage_name, chunk_x, chunk_z, done, total, pct, remaining, eta]
+
+
 func _on_complete(world_name: String) -> void:
 	_generating = false
 	_generate_btn.disabled = false
 	_rebake_navmesh_btn.disabled = false
 	_log_label.text = "Generation complete! World: %s" % world_name
+	_status_label.text = ""
 	_progress_bar.value = 100.0
 
 
@@ -108,19 +121,36 @@ func _on_rebake_navmesh_btn_pressed() -> void:
 	_rebake_navmesh_btn.disabled = true
 	_log_label.text = "Re-baking navmeshes..."
 	_progress_bar.value = 0.0
+	_status_label.text = ""
 	var generator := WorldGenerator.new()
 	generator.navmesh_progress.connect(_on_navmesh_progress)
+	generator.step_progress.connect(_on_step_progress)
 	await generator.rebuild_navmeshes(world_name_str, meta.chunk_count_x, meta.chunk_count_z, meta.region_size)
 	_generating = false
 	_generate_btn.disabled = false
 	_rebake_navmesh_btn.disabled = false
 	_log_label.text = "Navmesh re-bake complete! World: %s" % world_name_str
+	_status_label.text = ""
 	_progress_bar.value = 100.0
 
 
 func _on_navmesh_progress(ratio: float) -> void:
 	_progress_bar.value = ratio * 100.0
 	_log_label.text = "Baking navmeshes... %d%%" % int(ratio * 100.0)
+
+
+func _format_duration(seconds: float) -> String:
+	if seconds <= 0.0:
+		return "calculating..."
+	if seconds < 60.0:
+		return "%ds" % int(ceilf(seconds))
+	var mins: int = int(seconds) / 60
+	var secs: int = int(seconds) % 60
+	if mins < 60:
+		return "%dm %02ds" % [mins, secs]
+	var hrs: int = mins / 60
+	mins = mins % 60
+	return "%dh %02dm" % [hrs, mins]
 
 
 func _update_slider_labels() -> void:

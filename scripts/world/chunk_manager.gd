@@ -5,15 +5,16 @@ const LOAD_RADIUS: int = 5
 const UNLOAD_DISTANCE: int = 7
 const PROCESS_BUDGET_USEC: int = 4000
 const COLLISION_BUDGET_USEC: int = 2000
-const NAVMESH_PER_FRAME: int = 3
+const CHUNK_AABB_Y_MIN: float = -25.0
+const CHUNK_AABB_HEIGHT: float = 110.0
 const DEBUG_TIMING: bool = true
 
 var _world_data: WorldData
+var _nav_region_manager: NavRegionManager
 var _loaded_chunks: Dictionary = {}
 var _player_chunk: Vector2i = Vector2i(-9999, -9999)
 var _initialized: bool = false
 var _chunk_load_queue: Array[Vector2i] = []
-var _navmesh_queue: Array[Vector2i] = []
 var _spawn_chunk: Vector2i = Vector2i(0, 0)
 var _using_spawn_point: bool = true
 var _worker: ChunkWorker = null
@@ -49,6 +50,9 @@ func _ready() -> void:
 	if _use_threads:
 		_worker = ChunkWorker.new()
 		_worker.start()
+	_nav_region_manager = NavRegionManager.new()
+	add_child(_nav_region_manager)
+	_nav_region_manager.initialize(_world_data, _nav_map_rid, world_name)
 	_preload_spawn_regions()
 	_spawn_load_start_msec = Time.get_ticks_msec()
 	if DEBUG_TIMING:
@@ -72,6 +76,9 @@ func _preload_spawn_regions() -> void:
 
 
 func _exit_tree() -> void:
+	if _nav_region_manager:
+		_nav_region_manager.shutdown()
+		_nav_region_manager = null
 	if _worker:
 		_worker.stop()
 		_worker = null
@@ -93,26 +100,25 @@ func _process(_delta: float) -> void:
 	var t1: int = Time.get_ticks_usec()
 	_queue_load_tasks()
 	var t2: int = Time.get_ticks_usec()
-	_process_navmesh_queue()
-	var t3: int = Time.get_ticks_usec()
 	_update_chunks()
-	var t4: int = Time.get_ticks_usec()
+	var t3: int = Time.get_ticks_usec()
 	_process_pending_collision()
-	var t5: int = Time.get_ticks_usec()
+	var t4: int = Time.get_ticks_usec()
 	_frame_timing["apply"] = float(t1 - t0) * 0.001
 	_frame_timing["queue"] = float(t2 - t1) * 0.001
 	_frame_timing["nav"] = float(t3 - t2) * 0.001
 	_frame_timing["update"] = float(t4 - t3) * 0.001
-	var total_ms: float = float(t5 - t0) * 0.001
+	var total_ms: float = float(t4 - t0) * 0.001
 	if DEBUG_TIMING and _frame_count % _timing_log_interval == 0:
 		var qsize: int = _chunk_load_queue.size() if _use_threads else 0
 		var pending: int = _pending_results.size() if _use_threads else 0
 		var wqueue: int = _worker._queue.size() if _worker else 0
-		print("[CM-TIME] frame=%d total=%.2fms apply=%.2f queue=%.2f nav=%.2f update=%.2f | loaded=%d q=%d pending=%d wq=%d nq=%d coll=%d" % [
+		var nav_regions: int = _nav_region_manager.get_loaded_region_count() if _nav_region_manager else 0
+		print("[CM-TIME] frame=%d total=%.2fms apply=%.2f queue=%.2f nav=%.2f update=%.2f | loaded=%d q=%d pending=%d wq=%d coll=%d navreg=%d" % [
 			_frame_count, total_ms,
 			_frame_timing["apply"], _frame_timing["queue"],
 			_frame_timing["nav"], _frame_timing["update"],
-			_loaded_chunks.size(), qsize, pending, wqueue, _navmesh_queue.size(), _pending_collision.size()
+			_loaded_chunks.size(), qsize, pending, wqueue, _pending_collision.size(), nav_regions
 		])
 
 
@@ -257,7 +263,7 @@ func _apply_load_result(rec: ChunkRecord, result: Dictionary) -> void:
 		RenderingServer.instance_set_base(rec.instance_rid, mesh.get_rid())
 		RenderingServer.instance_set_scenario(rec.instance_rid, _scenario_rid)
 		RenderingServer.instance_set_transform(rec.instance_rid, rec.world_position)
-		var chunk_aabb := AABB(Vector3.ZERO, Vector3(float(ChunkData.CHUNK_SIZE), float(ChunkData.GRID_RESOLUTION), float(ChunkData.CHUNK_SIZE)))
+		var chunk_aabb := AABB(Vector3(0.0, CHUNK_AABB_Y_MIN, 0.0), Vector3(float(ChunkData.CHUNK_SIZE), CHUNK_AABB_HEIGHT, float(ChunkData.CHUNK_SIZE)))
 		RenderingServer.instance_set_custom_aabb(rec.instance_rid, chunk_aabb)
 		var mat_rid: RID = TerrainMeshBuilder.get_terrain_material().get_rid()
 		RenderingServer.instance_set_surface_override_material(rec.instance_rid, 0, mat_rid)
@@ -275,9 +281,6 @@ func _apply_load_result(rec: ChunkRecord, result: Dictionary) -> void:
 		var phys_ms: float = float(Time.get_ticks_usec() - tp0) * 0.001
 		if DEBUG_TIMING:
 			print("[CM-TIME]   chunk(%d,%d) LOD%d collision_deferred=%.2fms" % [rec.chunk_pos.x, rec.chunk_pos.y, rec.current_lod, phys_ms])
-
-	if rec.current_lod == 0:
-		_navmesh_queue.append(rec.chunk_pos)
 
 	_chunk_load_queue.erase(rec.chunk_pos)
 
@@ -307,7 +310,7 @@ func _apply_lod_result(rec: ChunkRecord, result: Dictionary) -> void:
 		RenderingServer.instance_set_base(rec.instance_rid, mesh.get_rid())
 		RenderingServer.instance_set_scenario(rec.instance_rid, _scenario_rid)
 		RenderingServer.instance_set_transform(rec.instance_rid, rec.world_position)
-		var chunk_aabb := AABB(Vector3.ZERO, Vector3(float(ChunkData.CHUNK_SIZE), float(ChunkData.GRID_RESOLUTION), float(ChunkData.CHUNK_SIZE)))
+		var chunk_aabb := AABB(Vector3(0.0, CHUNK_AABB_Y_MIN, 0.0), Vector3(float(ChunkData.CHUNK_SIZE), CHUNK_AABB_HEIGHT, float(ChunkData.CHUNK_SIZE)))
 		RenderingServer.instance_set_custom_aabb(rec.instance_rid, chunk_aabb)
 		var mat_rid: RID = TerrainMeshBuilder.get_terrain_material().get_rid()
 		RenderingServer.instance_set_surface_override_material(rec.instance_rid, 0, mat_rid)
@@ -327,18 +330,13 @@ func _apply_lod_result(rec: ChunkRecord, result: Dictionary) -> void:
 	elif not should_have_collision and rec.has_collision:
 		rec.remove_collision()
 
-	if new_lod == 0 and not rec.has_nav and not _navmesh_queue.has(rec.chunk_pos):
-		_navmesh_queue.append(rec.chunk_pos)
-	elif new_lod > 0 and rec.has_nav:
-		rec.remove_nav()
-
 
 func _process_pending_collision() -> void:
 	if _pending_collision.is_empty():
 		return
 	var budget_usec: int = Time.get_ticks_usec() + COLLISION_BUDGET_USEC
 	var remaining: Array[Vector2i] = []
-	var created: int = 0
+	var _created: int = 0
 	for chunk_pos: Vector2i in _pending_collision:
 		if Time.get_ticks_usec() > budget_usec:
 			remaining.append(chunk_pos)
@@ -357,7 +355,7 @@ func _process_pending_collision() -> void:
 		rec.shape_rid = rec.shape.get_rid()
 		PhysicsServer3D.body_add_shape(rec.body_rid, rec.shape_rid)
 		rec.has_collision = true
-		created += 1
+		_created += 1
 		if DEBUG_TIMING:
 			print("[CM-TIME]   chunk(%d,%d) LOD%d physics_setup=deferred" % [rec.chunk_pos.x, rec.chunk_pos.y, rec.current_lod])
 	_pending_collision = remaining
@@ -422,38 +420,6 @@ func _process_load_sync(rec: ChunkRecord, chunk_data: ChunkData, lod: int, needs
 	_apply_load_result(rec, result)
 
 
-func _process_navmesh_queue() -> void:
-	if _navmesh_queue.is_empty():
-		return
-	var loaded_count: int = 0
-	while not _navmesh_queue.is_empty() and loaded_count < NAVMESH_PER_FRAME:
-		var chunk_pos: Vector2i = _navmesh_queue.pop_front()
-		if not _loaded_chunks.has(chunk_pos):
-			continue
-		var rec: ChunkRecord = _loaded_chunks[chunk_pos]
-		if rec.has_nav:
-			continue
-		if rec.current_lod != 0:
-			continue
-		var navmesh: NavigationMesh = NavMeshGenerator.load_cached_navmesh(world_name, chunk_pos.x, chunk_pos.y)
-		if navmesh == null:
-			continue
-		_apply_navmesh_to_chunk(rec, navmesh)
-		loaded_count += 1
-		if DEBUG_TIMING:
-			print("[CM-TIME] navmesh LOADED chunk(%d,%d) verts=%d" % [chunk_pos.x, chunk_pos.y, navmesh.get_vertices().size()])
-
-
-func _apply_navmesh_to_chunk(rec: ChunkRecord, navmesh: NavigationMesh) -> void:
-	rec.nav_mesh = navmesh
-	rec.nav_mesh_rid = navmesh.get_rid()
-	rec.nav_region_rid = NavigationServer3D.region_create()
-	NavigationServer3D.region_set_map(rec.nav_region_rid, _nav_map_rid)
-	NavigationServer3D.region_set_transform(rec.nav_region_rid, rec.world_position)
-	NavigationServer3D.region_set_navigation_mesh(rec.nav_region_rid, navmesh)
-	rec.has_nav = true
-
-
 func _update_chunks() -> void:
 	var ref_pos: Vector3 = _get_reference_position()
 	var ref_chunk: Vector2i = _world_to_chunk(ref_pos)
@@ -491,6 +457,9 @@ func _update_loaded_chunks() -> void:
 		_player_chunk.x, _player_chunk.y, LOAD_RADIUS
 	)
 	_world_data.unload_distant_regions(needed_regions)
+
+	if _nav_region_manager:
+		_nav_region_manager.update_for_player_chunk(_player_chunk)
 
 	_refresh_chunk_positions()
 	_update_lods()
@@ -556,10 +525,10 @@ func _refresh_chunk_positions() -> void:
 			RenderingServer.instance_set_transform(rec.instance_rid, new_transform)
 		if rec.body_rid != RID():
 			PhysicsServer3D.body_set_state(rec.body_rid, PhysicsServer3D.BODY_STATE_TRANSFORM, new_transform)
-		if rec.nav_region_rid != RID():
-			NavigationServer3D.region_set_transform(rec.nav_region_rid, new_transform)
 		if foliage_renderer:
 			foliage_renderer.set_chunk_world_pos(chunk_pos, world_pos.x, world_pos.y)
+	if _nav_region_manager:
+		_nav_region_manager.refresh_region_transforms()
 
 
 func _update_lods() -> void:

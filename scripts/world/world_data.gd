@@ -164,6 +164,12 @@ func _load_region(rrx: int, rrz: int) -> RegionData:
 	return null
 
 
+func get_chunk_region_key(chunk_rx: int, chunk_rz: int) -> Vector2i:
+	var wrx: int = posmod(chunk_rx, chunk_count_x)
+	var wrz: int = posmod(chunk_rz, chunk_count_z)
+	return Vector2i(floori(wrx / float(region_size)), floori(wrz / float(region_size)))
+
+
 func get_needed_regions_for_chunk(chunk_rx: int, chunk_rz: int, _radius: int) -> Array[Vector2i]:
 	var regions: Array[Vector2i] = []
 	var center_rrx: int = floori(posmod(chunk_rx, chunk_count_x) / float(region_size))

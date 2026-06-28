@@ -10,8 +10,7 @@ const BIOME_COLORS: Dictionary = {
 
 const LOD_DISTANCES: PackedFloat32Array = [80.0, 200.0, 400.0, 700.0, INF]
 
-const SKIRT_DROP: float = 10.0
-const BORDER_WIDTH: int = 2
+const SKIRT_DROP: float = 20.0
 
 static var _terrain_material: StandardMaterial3D
 
@@ -28,10 +27,6 @@ static func get_terrain_material() -> StandardMaterial3D:
 static func _h(hm: PackedFloat32Array, lx: int, lz: int, res: int) -> float:
 	var sr: int = res + 2
 	return hm[clampi(lz + 1, 0, sr - 1) * sr + clampi(lx + 1, 0, sr - 1)]
-
-
-static func _in_border(v: int, res: int, b: int) -> bool:
-	return v < b or v >= res - 1 - b
 
 
 static func _emit_quad_arrays(verts: PackedVector3Array, normals_arr: PackedVector3Array, uvs: PackedVector2Array, colors: PackedColorArray, indices: PackedInt32Array, v00: Vector3, v10: Vector3, v01: Vector3, v11: Vector3, n00: Vector3, n10: Vector3, n01: Vector3, n11: Vector3, uv00: Vector2, uv10: Vector2, uv01: Vector2, uv11: Vector2, color: Color) -> void:
@@ -71,6 +66,18 @@ static func _precompute_normals(chunk_data: ChunkData, res: int) -> Array:
 		normals[iz] = row
 	return normals
 
+
+static func _compute_border_width(res: int, spacing: int) -> int:
+	var b: int = spacing
+	var interior: int = (res - 1) - 2 * b
+	while interior > 0 and interior % spacing != 0:
+		b += 1
+		interior = (res - 1) - 2 * b
+	if interior < spacing:
+		return 0
+	return b
+
+
 static func build_chunk_mesh_arrays(chunk_data: ChunkData, lod: int) -> Dictionary:
 	var res: int = ChunkData.GRID_RESOLUTION
 	var color: Color = BIOME_COLORS.get(chunk_data.biome, BIOME_COLORS[0])
@@ -83,8 +90,10 @@ static func build_chunk_mesh_arrays(chunk_data: ChunkData, lod: int) -> Dictiona
 	var pre_normals: Array = _precompute_normals(chunk_data, res)
 
 	var spacing: int = 1 << lod
-	var b: int = BORDER_WIDTH
+	var b: int = _compute_border_width(res, spacing)
 	var rf: float = float(res)
+	var _interior_start: int = b
+	var _interior_end: int = (res - 1) - b
 
 	var verts := PackedVector3Array()
 	var normals := PackedVector3Array()
@@ -97,8 +106,8 @@ static func build_chunk_mesh_arrays(chunk_data: ChunkData, lod: int) -> Dictiona
 		var step_z: int = _row_step(lz, spacing, b, res)
 		var lx: int = 0
 		while lx < res - 1:
-			var step: int = _col_step(lx, lz, step_z, spacing, b, res)
-			var nx: int = mini(lx + step, res - 1)
+			var step_x: int = _col_step(lx, lz, step_z, spacing, b, res)
+			var nx: int = mini(lx + step_x, res - 1)
 			var nz: int = mini(lz + step_z, res - 1)
 
 			var n00: Vector3 = pre_normals[lz][lx]
@@ -130,7 +139,7 @@ static func build_chunk_mesh_arrays(chunk_data: ChunkData, lod: int) -> Dictiona
 			indices.append(base + 3)
 			indices.append(base + 2)
 
-			lx += step
+			lx += step_x
 		lz += step_z
 
 	_build_skirt_arrays(verts, normals, uvs, colors, indices, hm, res, color, pre_normals)
@@ -165,10 +174,16 @@ static func _arrays_to_mesh(data: Dictionary) -> ArrayMesh:
 	return mesh
 
 
+static func _in_border(v: int, res: int, b: int) -> bool:
+	if b == 0:
+		return v == 0 or v >= res - 1
+	return v < b or v >= res - 1 - b
+
+
 static func _row_step(lz: int, spacing: int, b: int, res: int) -> int:
 	if _in_border(lz, res, b):
 		return 1
-	if lz + spacing > res - 1 - b:
+	if lz + spacing > (res - 1) - b:
 		return (res - 1 - b) - lz
 	return spacing
 
@@ -177,7 +192,7 @@ static func _col_step(lx: int, _lz: int, step_z: int, spacing: int, b: int, res:
 	if _in_border(lx, res, b):
 		return 1
 	var natural_x: int = spacing
-	if lx + spacing > res - 1 - b:
+	if lx + spacing > (res - 1) - b:
 		natural_x = (res - 1 - b) - lx
 		if natural_x <= 0:
 			return 1

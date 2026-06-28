@@ -6,6 +6,7 @@ signal progress_changed(ratio: float, stage: String)
 signal generation_complete(world_name: String)
 signal region_saved(rrx: int, rrz: int)
 signal navmesh_progress(ratio: float)
+signal step_progress(stage: String, done: int, total: int, chunk_x: int, chunk_z: int, elapsed_sec: float, remaining_sec: float)
 
 const MAX_CONCURRENT_BAKES: int = 16
 
@@ -52,6 +53,7 @@ func generate_world(config: WorldGenConfig) -> void:
 
 	var total_chunks: int = config.chunk_count_x * config.chunk_count_z
 	var chunks_done: int = 0
+	var t_start: float = Time.get_ticks_msec() / 1000.0
 
 	var region_count_x: int = floori(config.chunk_count_x / float(config.region_size))
 	var region_count_z: int = floori(config.chunk_count_z / float(config.region_size))
@@ -78,6 +80,10 @@ func generate_world(config: WorldGenConfig) -> void:
 					region.set_chunk_biome(local_rx, local_rz, 0)
 
 					chunks_done += 1
+					var elapsed: float = Time.get_ticks_msec() / 1000.0 - t_start
+					var rate: float = chunks_done / elapsed if elapsed > 0.01 else 0.0
+					var remaining: float = (float(total_chunks - chunks_done) / rate) if rate > 0.01 else 0.0
+					step_progress.emit("terrain", chunks_done, total_chunks, chunk_rx, chunk_rz, elapsed, remaining)
 
 			var region_path: String = "res://data/worlds/%s/regions/region_%02d_%02d.res" % [config.world_name, rrx, rrz]
 			var err: int = ResourceSaver.save(region, region_path)
@@ -91,7 +97,7 @@ func generate_world(config: WorldGenConfig) -> void:
 	_save_world_meta(config, actual_seed, backend_name, params)
 	_export_meta_json(config, actual_seed, backend_name, params)
 
-	await _bake_all_navmeshes(config)
+	await _bake_all_nav_regions(config)
 
 	generation_complete.emit(config.world_name)
 	print("WorldGenerator: complete! Generated %d chunks in %d regions" % [total_chunks, region_count_x * region_count_z])
@@ -144,7 +150,7 @@ func _export_meta_json(config: WorldGenConfig, actual_seed: int, backend_name: S
 			"continental_octaves": params.continental_octaves,
 			"continental_weight": params.continental_weight,
 			"mountain_mask_freq": params.mountain_mask_freq,
-			"mountain_mask_octaves": params.mountain_mask_octaves,
+			"mountain_mask_octaves": config.mountain_mask_octaves,
 			"mountain_mask_edge0": params.mountain_mask_edge0,
 			"mountain_mask_edge1": params.mountain_mask_edge1,
 			"mountain_freq": params.mountain_freq,
@@ -170,15 +176,15 @@ func _export_meta_json(config: WorldGenConfig, actual_seed: int, backend_name: S
 		file.close()
 
 
-func _bake_all_navmeshes(config: WorldGenConfig) -> void:
-	var total_chunks: int = config.chunk_count_x * config.chunk_count_z
-	print("WorldGenerator: baking navmeshes for %d chunks (async)..." % total_chunks)
-	NavMeshGenerator.ensure_navmesh_dir(config.world_name)
-
+func _bake_all_nav_regions(config: WorldGenConfig) -> void:
 	var region_count_x: int = floori(config.chunk_count_x / float(config.region_size))
 	var region_count_z: int = floori(config.chunk_count_z / float(config.region_size))
+	var total_regions: int = region_count_x * region_count_z
+	print("WorldGenerator: baking nav regions for %d regions..." % total_regions)
+	NavMeshGenerator.ensure_nav_region_dir(config.world_name)
+	NavMeshGenerator.delete_old_chunk_navmeshes(config.world_name)
 
-	var counters := { "completed": 0, "in_flight": 0 }
+	var counters := { "completed": 0, "in_flight": 0, "last_rrx": 0, "last_rrz": 0 }
 
 	var regions: Array[RegionData] = []
 	for rrx: int in range(region_count_x):
@@ -186,65 +192,78 @@ func _bake_all_navmeshes(config: WorldGenConfig) -> void:
 			var region_path: String = "res://data/worlds/%s/regions/region_%02d_%02d.res" % [config.world_name, rrx, rrz]
 			var region: RegionData = ResourceLoader.load(region_path, "", ResourceLoader.CACHE_MODE_REUSE)
 			if region == null:
-				push_error("WorldGenerator: failed to load region %s for navmesh baking" % region_path)
+				push_error("WorldGenerator: failed to load region %s for nav baking" % region_path)
 			regions.append(region)
+
+	var nav_start_msec: float = Time.get_ticks_msec()
 
 	for rrx: int in range(region_count_x):
 		for rrz: int in range(region_count_z):
 			var region: RegionData = regions[rrx * region_count_z + rrz]
 			if region == null:
-				counters["completed"] += RegionData.REGION_SIZE * RegionData.REGION_SIZE
+				counters["completed"] += 1
 				continue
-			for local_rx: int in range(RegionData.REGION_SIZE):
-				for local_rz: int in range(RegionData.REGION_SIZE):
-					var chunk_rx: int = region.region_rx * RegionData.REGION_SIZE + local_rx
-					var chunk_rz: int = region.region_rz * RegionData.REGION_SIZE + local_rz
-					var chunk_data: ChunkData = ChunkData.from_region(region, local_rx, local_rz)
-					if chunk_data == null or chunk_data.heightmap.is_empty():
-						counters["completed"] += 1
-						continue
-					var navmesh := NavMeshGenerator.create_navmesh_config()
-					var source_geometry := NavMeshGenerator.create_source_geometry(chunk_data)
-					var baked_callback := _make_bake_callback(navmesh, config.world_name, chunk_rx, chunk_rz, counters)
-					NavMeshGenerator.bake_prepared_navmesh_async(navmesh, source_geometry, baked_callback)
-					counters["in_flight"] += 1
 
-					while counters["in_flight"] >= MAX_CONCURRENT_BAKES:
-						await Engine.get_main_loop().process_frame
+			var navmesh := NavMeshGenerator.create_region_navmesh_config(config.region_size, config.chunk_size)
+			var source_geometry := NavMeshGenerator.create_region_source_geometry(region, config.region_size, config.chunk_size)
+			var baked_callback := _make_region_bake_callback(navmesh, config.world_name, rrx, rrz, counters)
+			NavigationServer3D.bake_from_source_geometry_data_async(navmesh, source_geometry, baked_callback)
+			counters["in_flight"] += 1
+			counters["last_rrx"] = rrx
+			counters["last_rrz"] = rrz
+
+			while counters["in_flight"] >= MAX_CONCURRENT_BAKES:
+				var elapsed_sec: float = (Time.get_ticks_msec() - nav_start_msec) / 1000.0
+				var done: int = counters["completed"]
+				var rate: float = done / elapsed_sec if elapsed_sec > 0.01 else 0.0
+				var remaining_sec: float = (float(total_regions - done) / rate) if rate > 0.01 else 0.0
+				var total_chunks_done: int = done * config.region_size * config.region_size
+				var last_cx: int = counters["last_rrx"] * config.region_size
+				var last_cz: int = counters["last_rrz"] * config.region_size
+				step_progress.emit("navmesh", total_chunks_done, config.chunk_count_x * config.chunk_count_z, last_cx, last_cz, elapsed_sec, remaining_sec)
+				await Engine.get_main_loop().process_frame
 
 	progress_changed.emit(0.5, "navmesh")
 
-	while counters["completed"] < total_chunks:
+	var last_emit_msec: float = 0.0
+	while counters["completed"] < total_regions:
+		var now_msec: float = Time.get_ticks_msec()
+		if now_msec - last_emit_msec >= 100.0:
+			var elapsed_sec: float = (now_msec - nav_start_msec) / 1000.0
+			var done: int = counters["completed"]
+			var rate: float = done / elapsed_sec if elapsed_sec > 0.01 else 0.0
+			var remaining_sec: float = (float(total_regions - done) / rate) if rate > 0.01 else 0.0
+			var nav_ratio: float = float(done) / float(total_regions)
+			progress_changed.emit(0.5 + nav_ratio * 0.5, "navmesh")
+			navmesh_progress.emit(nav_ratio)
+			var total_chunks_done: int = done * config.region_size * config.region_size
+			var last_cx: int = counters["last_rrx"] * config.region_size
+			var last_cz: int = counters["last_rrz"] * config.region_size
+			step_progress.emit("navmesh", total_chunks_done, config.chunk_count_x * config.chunk_count_z, last_cx, last_cz, elapsed_sec, remaining_sec)
+			last_emit_msec = now_msec
 		await Engine.get_main_loop().process_frame
-		progress_changed.emit(0.5 + float(counters["completed"]) / float(total_chunks) * 0.5, "navmesh")
-		navmesh_progress.emit(float(counters["completed"]) / float(total_chunks))
 
 	progress_changed.emit(1.0, "navmesh")
 	navmesh_progress.emit(1.0)
-	print("WorldGenerator: navmesh baking complete! %d/%d chunks" % [counters["completed"], total_chunks])
+	print("WorldGenerator: nav region baking complete! %d/%d regions" % [counters["completed"], total_regions])
 
 
-func _make_bake_callback(navmesh: NavigationMesh, world_name: String, chunk_rx: int, chunk_rz: int, counters: Dictionary) -> Callable:
+func _make_region_bake_callback(navmesh: NavigationMesh, world_name: String, rrx: int, rrz: int, counters: Dictionary) -> Callable:
 	return func() -> void:
-		NavMeshGenerator.save_navmesh(navmesh, world_name, chunk_rx, chunk_rz)
+		NavMeshGenerator.save_nav_region(navmesh, world_name, rrx, rrz)
 		counters["completed"] += 1
 		counters["in_flight"] -= 1
+		counters["last_rrx"] = rrx
+		counters["last_rrz"] = rrz
 
 
 func rebuild_navmeshes(world_name: String, chunk_count_x: int, chunk_count_z: int, region_size: int) -> void:
-	var nav_dir: String = "res://data/worlds/%s/navmeshes" % world_name
-	if DirAccess.dir_exists_absolute(nav_dir):
-		var dir := DirAccess.open(nav_dir)
-		if dir:
-			dir.list_dir_begin()
-			var file_name: String = dir.get_next()
-			while file_name != "":
-				if file_name.ends_with(".res"):
-					dir.remove(file_name)
-				file_name = dir.get_next()
+	NavMeshGenerator.delete_old_chunk_navmeshes(world_name)
+	NavMeshGenerator.ensure_nav_region_dir(world_name)
 	var config := WorldGenConfig.new()
 	config.world_name = world_name
 	config.chunk_count_x = chunk_count_x
 	config.chunk_count_z = chunk_count_z
 	config.region_size = region_size
-	await _bake_all_navmeshes(config)
+	config.chunk_size = ChunkData.CHUNK_SIZE
+	await _bake_all_nav_regions(config)

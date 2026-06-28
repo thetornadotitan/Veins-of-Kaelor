@@ -2,6 +2,10 @@
 class_name HeightmapGenerator
 extends RefCounted
 
+const BLEND_POWER: float = 1.5
+const MOUNTAIN_BASE: float = 0.35
+
+
 static func create_noise(p_seed: int) -> RefCounted:
 	if ClassDB.class_exists("SimplexNoise4DNative"):
 		var noise = ClassDB.instantiate("SimplexNoise4DNative")
@@ -51,6 +55,7 @@ static func generate_chunk_heightmap(
 
 	var mo: float = params.mountain_mask_offset
 	var d_off: float = params.detail_offset
+	var height_range: float = params.height_range_max - params.height_range_min
 
 	for lz: int in range(sr):
 		for lx: int in range(sr):
@@ -75,7 +80,7 @@ static func generate_chunk_heightmap(
 				params.mountain_mask_edge0, params.mountain_mask_edge1,
 				mountain_mask * 0.5 + 0.5)
 
-			var mountains: float = _ridged_fbm(noise, use_native,
+			var mountains_raw: float = _ridged_fbm(noise, use_native,
 				nx, ny, nz, nw,
 				params.mountain_octaves, params.mountain_freq,
 				params.mountain_persistence, params.mountain_lacunarity)
@@ -85,15 +90,22 @@ static func generate_chunk_heightmap(
 				params.plains_octaves, params.plains_freq,
 				params.plains_persistence, 2.0)
 
-			var elevation: float = lerp(plains, mountains, mountain_mask) + params.continental_weight * continental
+			var base_terrain: float = plains * 0.15 + 0.2
+			base_terrain += params.continental_weight * continental * 0.1
+
+			var mountain_noise: float = maxf(0.0, MOUNTAIN_BASE + mountains_raw * 0.5)
+			var mountain_uplift: float = pow(mountain_noise, params.power_exponent)
+
+			var blend: float = pow(mountain_mask, BLEND_POWER)
+			var elevation: float = lerp(base_terrain, mountain_uplift, blend)
 
 			var detail: float = _fbm(noise, use_native,
 				nx + d_off, ny + d_off, nz + d_off, nw + d_off,
 				params.detail_octaves, params.detail_freq,
 				params.detail_persistence, params.detail_lacunarity)
 			elevation += detail * params.detail_weight
-			elevation = pow(maxf(0.0, elevation), params.power_exponent)
 
-			heightmap[lz * sr + lx] = (elevation * 0.5 + 0.5) * (params.height_range_max - params.height_range_min) + params.height_range_min
+			elevation = clampf(elevation, 0.0, 1.0)
+			heightmap[lz * sr + lx] = elevation * height_range + params.height_range_min
 
 	return heightmap
