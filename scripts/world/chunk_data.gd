@@ -10,9 +10,10 @@ var chunk_rx: int
 var chunk_rz: int
 var heightmap: PackedFloat32Array
 var biome: int = 0
+var water_level: float = 15.0
 
 
-static func from_region(region: RegionData, local_rx: int, local_rz: int) -> ChunkData:
+static func from_region(region: RegionData, local_rx: int, local_rz: int, p_water_level: float = 15.0) -> ChunkData:
 	var cd := ChunkData.new()
 	var hm: PackedFloat32Array = region.get_chunk_heightmap(local_rx, local_rz)
 	if not hm.is_empty() and hm.size() == GRID_RESOLUTION * GRID_RESOLUTION:
@@ -22,6 +23,7 @@ static func from_region(region: RegionData, local_rx: int, local_rz: int) -> Chu
 	cd.biome = region.chunk_biomes[biome_index]
 	cd.chunk_rx = region.region_rx * RegionData.REGION_SIZE + local_rx
 	cd.chunk_rz = region.region_rz * RegionData.REGION_SIZE + local_rz
+	cd.water_level = p_water_level
 	return cd
 
 

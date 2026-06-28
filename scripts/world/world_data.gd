@@ -71,7 +71,8 @@ func get_chunk_data(rx: int, rz: int) -> ChunkData:
 	var region: RegionData = _load_region(rrx, rrz)
 	if region == null:
 		return null
-	return ChunkData.from_region(region, local_rx, local_rz)
+	var wl: float = generation_params.water_level if generation_params else 15.0
+	return ChunkData.from_region(region, local_rx, local_rz, wl)
 
 
 func get_region_path(rrx: int, rrz: int) -> String:

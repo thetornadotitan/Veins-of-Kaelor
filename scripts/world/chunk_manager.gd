@@ -193,6 +193,10 @@ func get_terrain_height(world_x: float, world_z: float) -> float:
 	return chunk_data.get_height_at(local_x, local_z)
 
 
+func get_chunk_data(cx: int, cz: int) -> ChunkData:
+	return _world_data.get_chunk_data(cx, cz)
+
+
 func get_terrain_normal(world_x: float, world_z: float) -> Vector3:
 	var chunk_x: int = posmod(floori(world_x / float(ChunkData.CHUNK_SIZE)), _world_data.chunk_count_x)
 	var chunk_z: int = posmod(floori(world_z / float(ChunkData.CHUNK_SIZE)), _world_data.chunk_count_z)

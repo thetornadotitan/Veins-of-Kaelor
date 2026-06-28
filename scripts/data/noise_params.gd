@@ -13,9 +13,12 @@ extends Resource
 @export var height_range_max: float = 80.0
 
 @export_group("Continental", "continental_")
-@export var continental_freq: float = 1.5
+@export var continental_freq: float = 0.2
 @export var continental_octaves: int = 2
-@export var continental_weight: float = 0.35
+@export var continental_edge0: float = 0.52
+@export var continental_edge1: float = 0.68
+@export var continental_warp_strength: float = 0.3
+@export var continental_warp_freq: float = 0.6
 
 @export_group("Mountain Mask", "mountain_mask_")
 @export var mountain_mask_freq: float = 2.0

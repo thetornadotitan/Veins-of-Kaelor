@@ -4,6 +4,7 @@
 
 # Generated world data (regenerate from editor)
 data/worlds/*/regions/
+data/worlds/*/nav_regions/
 
 # GDExtension build artifacts (compile locally)
 addons/simplex_noise_4d/bin/

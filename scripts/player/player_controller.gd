@@ -41,6 +41,10 @@ func _physics_process(delta: float) -> void:
 	else:
 		_apply_gravity(delta)
 		_handle_jump()
+		if Input.is_action_pressed("crouch"):
+			var water: WaterPlane = get_tree().get_first_node_in_group("water_plane")
+			if water and global_position.y <= water.get_water_level() + 2.0:
+				velocity.y -= 6.0 * delta
 	_handle_movement()
 	move_and_slide()
 	var did_wrap: bool = _wrap_world_coordinates()
@@ -61,7 +65,7 @@ func _process_swimming(delta: float) -> void:
 	if Input.is_action_pressed("jump"):
 		velocity.y += swim_speed * delta
 	if Input.is_action_pressed("crouch") or Input.is_action_pressed("move_back"):
-		velocity.y -= swim_speed * delta * 0.5
+		velocity.y -= swim_speed * delta * 2.0
 
 
 func _apply_gravity(delta: float) -> void:

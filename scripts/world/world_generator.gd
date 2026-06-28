@@ -32,7 +32,10 @@ func generate_world(config: WorldGenConfig) -> void:
 	params.biome_moisture_scale = 0.008
 	params.continental_freq = config.continental_freq
 	params.continental_octaves = config.continental_octaves
-	params.continental_weight = config.continental_weight
+	params.continental_edge0 = config.continental_edge0
+	params.continental_edge1 = config.continental_edge1
+	params.continental_warp_strength = config.continental_warp_strength
+	params.continental_warp_freq = config.continental_warp_freq
 	params.mountain_mask_freq = config.mountain_mask_freq
 	params.mountain_mask_octaves = config.mountain_mask_octaves
 	params.mountain_mask_edge0 = config.mountain_mask_edge0
@@ -148,9 +151,12 @@ func _export_meta_json(config: WorldGenConfig, actual_seed: int, backend_name: S
 			"water_level": params.water_level,
 			"continental_freq": params.continental_freq,
 			"continental_octaves": params.continental_octaves,
-			"continental_weight": params.continental_weight,
+			"continental_edge0": params.continental_edge0,
+			"continental_edge1": params.continental_edge1,
+			"continental_warp_strength": params.continental_warp_strength,
+			"continental_warp_freq": params.continental_warp_freq,
 			"mountain_mask_freq": params.mountain_mask_freq,
-			"mountain_mask_octaves": config.mountain_mask_octaves,
+			"mountain_mask_octaves": params.mountain_mask_octaves,
 			"mountain_mask_edge0": params.mountain_mask_edge0,
 			"mountain_mask_edge1": params.mountain_mask_edge1,
 			"mountain_freq": params.mountain_freq,

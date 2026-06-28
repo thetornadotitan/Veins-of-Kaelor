@@ -1,15 +1,1 @@
-﻿{
-  "biome_enabled": false,
-  "generate_new_seed": true,
-  "height_range_max": 40,
-  "height_range_min": 0,
-  "height_scale": 4,
-  "lacunarity": 2,
-  "octaves": 4,
-  "output_world_name": "kaelor_alpha",
-  "persistence": 0.5,
-  "region_size": 8,
-  "seed": 0,
-  "torus_radius": 1,
-  "water_level": 8
-}
+﻿{"biome_enabled":false,"continental_edge0":0.52,"continental_edge1":0.68,"continental_freq":0.2,"continental_octaves":2,"continental_warp_freq":0.6,"continental_warp_strength":0.3,"generate_new_seed":true,"height_range_max":80,"height_range_min":0,"height_scale":4,"lacunarity":2,"octaves":4,"output_world_name":"kaelor_alpha","persistence":0.5,"region_size":8,"seed":0,"torus_radius":1,"water_level":8}

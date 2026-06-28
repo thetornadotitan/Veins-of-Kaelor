@@ -2,7 +2,7 @@ class_name WaterPlane
 extends MeshInstance3D
 
 @export var plane_size: float = 600.0
-@export var plane_subdivision: int = 64
+@export var plane_subdivision: int = 128
 
 var water_level: float = 0.0
 var _shader_material: ShaderMaterial
